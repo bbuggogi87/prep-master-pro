@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PREP MASTER PRO - 식단 & 체중 기록지</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
+        body { font-family: 'Pretendard', 'Inter', sans-serif; background-color: #090D16; color: #F8FAFC; -webkit-tap-highlight-color: transparent; padding-bottom: 90px; }
+        .glass-panel { background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4); }
+        .active-tab { background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%) !important; color: #FFFFFF !important; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4); border-color: transparent !important; }
+        .phase-btn-active { background-color: rgba(14, 165, 233, 0.2); border-color: rgba(14, 165, 233, 0.6) !important; color: #38BDF8; }
+
+        /* [신규 추가] 모바일 친화적 메인 메뉴 내비게이션 버튼 — 좁은 화면에서 글자가 잘리거나 가로 스크롤로 묻히는 문제 해소 */
+        .nav-menu-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 2px; padding: 0.55rem 0.2rem; border-radius: 0.75rem;
+            border: 1px solid rgba(30, 41, 59, 1); color: #94A3B8; font-weight: 800;
+            background: rgba(15, 23, 42, 0.4); transition: all 0.2s ease; min-width: 0; cursor: pointer;
+        }
+        .nav-menu-btn:hover { color: #FFFFFF; border-color: rgba(100, 116, 139, 0.7); }
+        .nav-menu-icon { font-size: 1.05rem; line-height: 1; }
+        .nav-menu-label { font-size: 9.5px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; letter-spacing: -0.02em; }
+        .nav-menu-link { border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.1); color: #FBBF24; }
+        .nav-menu-link:hover { color: #FCD34D; border-color: rgba(245, 158, 11, 0.5); }
+        @media (min-width: 640px) {
+            .nav-menu-btn { flex-direction: row; padding: 0.75rem 1.15rem; gap: 0.5rem; border-radius: 0.85rem; }
+            .nav-menu-icon { font-size: 1.05rem; }
+            .nav-menu-label { font-size: 0.95rem; }
+        }
+        #floating-menu-bar .nav-menu-btn { padding: 0.4rem 0.3rem; }
+        #floating-menu-bar .nav-menu-label { font-size: 9px; }
+        @media (min-width: 640px) {
+            #floating-menu-bar .nav-menu-btn { padding: 0.5rem 0.9rem; }
+            #floating-menu-bar .nav-menu-label { font-size: 0.8rem; }
+        }
+        
+        input[type="time"] { position: relative; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+        input[type="time"]::-webkit-calendar-picker-indicator { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: transparent; color: transparent; cursor: pointer; z-index: 10; 
+        }
+        
+        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; }
+        input[type="number"] { -moz-appearance: textfield !important; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.3); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(14, 165, 233, 0.3); border-radius: 10px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        select option { background-color: #1E293B; color: #F8FAFC; }
+        optgroup { background-color: #0F172A; color: #94A3B8; font-weight: 900; }
+        textarea { resize: vertical; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        
+        .matrix-chip-active { background-color: #0EA5E9 !important; color: #FFFFFF !important; font-weight: 900; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
+    </style>
+</head>
+<body class="antialiased min-h-screen custom-scrollbar relative">
+
+<div id="global-loading-layer" class="fixed inset-0 bg-[#090D16]/90 z-[300] hidden flex-col items-center justify-center gap-4">
+    <div class="w-12 h-12 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+    <p id="global-loading-text" class="text-sm font-black text-sky-500 tracking-wider">시스템 인프라 정밀 동기화 중...</p>
+</div>
+
+<div id="toast" class="fixed bottom-24 right-5 z-50 transform translate-y-10 opacity-0 transition-all duration-300 pointer-events-none shadow-2xl">
+    <div class="glass-panel px-5 py-4 rounded-2xl flex items-center gap-3 border-sky-500/50 bg-[#090D16]/95">
+        <span class="w-3 h-3 bg-sky-500 rounded-full animate-ping flex-shrink-0"></span>
+        <p class="text-sm font-bold text-white break-keep" id="toast-text">알림 메세지</p>
+    </div>
+</div>
+
+<div id="sticky-macro-bar" class="fixed bottom-0 left-0 w-full z-40 transform translate-y-full opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="glass-panel mx-auto max-w-7xl px-3 sm:px-4 py-3 flex justify-between items-center border-t border-sky-500/30 shadow-2xl bg-[#090D16]/95">
+        <div class="flex items-center gap-2 sm:gap-4"><span class="text-sm font-black text-white hidden sm:inline pl-2 border-l-4 border-sky-500">DIET & WEIGHT BAR</span></div>
+        <div class="flex gap-2.5 sm:gap-6 text-xs font-bold uppercase items-center">
+            <div class="flex items-center gap-1"><span class="text-slate-400 hidden sm:inline">KCAL</span> <span id="sticky-kcal" class="text-white text-base sm:text-lg font-black">0</span></div>
+            <div class="w-px h-4 bg-slate-700 mx-1 sm:mx-0"></div>
+            <div class="flex items-center gap-1"><span class="text-amber-500">C</span> <span id="sticky-carbs" class="text-amber-400 text-sm sm:text-base font-black">0g</span></div>
+            <div class="flex items-center gap-1"><span class="text-emerald-500">P</span> <span id="sticky-protein" class="text-emerald-400 text-sm sm:text-base font-black">0g</span></div>
+            <div class="flex items-center gap-1"><span class="text-sky-500">F</span> <span id="sticky-fat" class="text-sky-400 text-sm sm:text-base font-black">0g</span></div>
+            <button onclick="window.closeMacroBar()" title="하단 정보 바 닫기" class="ml-0.5 sm:ml-2 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 rounded-full font-black text-[11px] sm:text-sm transition-colors active:scale-90 shrink-0">✕</button>
+        </div>
+    </div>
+</div>
+
+<div id="floating-menu-bar" class="fixed top-0 left-0 w-full z-50 -translate-y-full opacity-0 pointer-events-none transition-all duration-300 ease-out">
+    <div class="glass-panel mx-auto max-w-7xl px-2 sm:px-4 py-2 flex items-center justify-center gap-1 sm:gap-2 border-b border-sky-500/20 shadow-2xl bg-[#090D16]/95">
+        <button data-tab-btn="tab-timeline" onclick="window.switchMainTab('tab-timeline')" class="nav-menu-btn">
+            <span class="nav-menu-icon">⏱️</span><span class="nav-menu-label"><span class="sm:hidden">식단</span><span class="hidden sm:inline">식단 플래너</span></span>
+        </button>
+        <button data-tab-btn="tab-calculator" onclick="window.switchMainTab('tab-calculator')" class="nav-menu-btn">
+            <span class="nav-menu-icon">🔄</span><span class="nav-menu-label"><span class="sm:hidden">변환기</span><span class="hidden sm:inline">스마트 변환기</span></span>
+        </button>
+        <button data-tab-btn="tab-analysis" onclick="window.switchMainTab('tab-analysis')" class="nav-menu-btn">
+            <span class="nav-menu-icon">🧬</span><span class="nav-menu-label"><span class="sm:hidden">입체분석</span><span class="hidden sm:inline">영양성분 입체분석</span></span>
+        </button>
+        <button data-tab-btn="tab-weight-record" onclick="window.switchMainTab('tab-weight-record')" class="nav-menu-btn">
+            <span class="nav-menu-icon">📊</span><span class="nav-menu-label"><span class="sm:hidden">체중기록</span><span class="hidden sm:inline">체중 기록</span></span>
+        </button>
+        <button data-tab-btn="tab-settings" onclick="window.switchMainTab('tab-settings')" class="nav-menu-btn">
+            <span class="nav-menu-icon">⚙️</span><span class="nav-menu-label"><span class="sm:hidden">설정</span><span class="hidden sm:inline">환경설정</span></span>
+        </button>
+        <a href="calendar.html" onclick="window.handleNavigationWithSave('calendar.html'); return false;" class="nav-menu-btn nav-menu-link">
+            <span class="nav-menu-icon">🏋️</span><span class="nav-menu-label"><span class="sm:hidden">캘린더</span><span class="hidden sm:inline">운동 캘린더</span></span>
+        </a>
+    </div>
+</div>
+
+<button id="scroll-to-top-btn" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="맨 위로" class="fixed bottom-24 left-5 z-40 w-11 h-11 flex items-center justify-center bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-full shadow-xl backdrop-blur-sm transition-all duration-300 opacity-0 translate-y-4 pointer-events-none active:scale-90">
+    <span class="text-lg font-black">↑</span>
+</button>
+
+
+
+<div id="edit-meal-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl w-full max-w-md animate-fade-in border border-sky-500/40 shadow-2xl">
+        <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2" id="edit-meal-title">⚙️ 일정 편집</h3>
+        <div class="space-y-4">
+            <div class="flex justify-between items-center"><label class="text-sm font-bold text-slate-300">시간</label><input type="time" id="edit-meal-time" class="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-sky-500 outline-none w-44"></div>
+            <div class="flex justify-between items-center"><label class="text-sm font-bold text-slate-300">라벨 (이름)</label><input type="text" id="edit-meal-label" class="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-sky-500 outline-none w-44"></div>
+            <div class="flex justify-between items-center"><label class="text-sm font-bold text-slate-300">테마 색상</label>
+                <select id="edit-meal-color" class="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-bold focus:border-sky-500 outline-none w-44">
+                    <option value="sky" class="text-sky-400">Sky Blue</option><option value="emerald" class="text-emerald-400">Emerald</option><option value="amber" class="text-amber-400">Amber</option><option value="rose" class="text-rose-400">Rose Red</option><option value="violet" class="text-violet-400">Violet</option><option value="slate" class="text-slate-400">Slate Gray</option>
+                </select>
+            </div>
+            <div><label class="block text-sm font-bold text-slate-300 mb-2">설명 메모</label><input type="text" id="edit-meal-explain" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:border-sky-500 outline-none"></div>
+            <div><label class="block text-sm font-bold text-slate-300 mb-2">보충제 메모</label><textarea id="edit-meal-supps" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:border-sky-500 outline-none h-24 custom-scrollbar"></textarea></div>
+        </div>
+        <div class="flex gap-3 mt-6"><button onclick="window.closeEditMealModal()" class="flex-1 py-3 rounded-xl border border-slate-700 text-slate-300 font-bold hover:bg-slate-800 transition-colors">취소</button><button onclick="window.saveEditMealModal()" class="flex-1 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition-colors">저장하기</button></div>
+    </div>
+</div>
+
+<div id="phase-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl w-full max-w-md animate-fade-in border border-sky-500/40 shadow-2xl">
+        <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">📑 식단 탭 관리</h3>
+        <div class="space-y-4">
+            <div><label class="block text-sm font-bold text-slate-300 mb-2">탭 명칭</label><input type="text" id="phase-title" placeholder="예: 평일 기본 식단" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white font-bold focus:border-sky-500 outline-none"></div>
+            <div><label class="block text-sm font-bold text-slate-300 mb-2">탭 설명</label><input type="text" id="phase-desc" placeholder="예: 탄수화물 베이스 유지" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:border-sky-500 outline-none"></div>
+        </div>
+        <div class="flex gap-3 mt-8"><button onclick="window.closePhaseModal()" class="flex-1 py-3 rounded-xl border border-slate-700 text-slate-300 font-bold hover:bg-slate-800 transition-colors">취소</button><button onclick="window.savePhaseModal()" class="flex-1 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition-colors">확인 및 저장</button></div>
+    </div>
+</div>
+
+<div id="profile-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl w-full max-w-md animate-fade-in border border-sky-500/40 shadow-2xl">
+        <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">👤 내 프로필 설정</h3>
+        <div class="space-y-5">
+            <div class="flex justify-between items-center"><label class="text-base font-bold text-slate-300">현재 체중</label><div class="flex items-center gap-2"><input type="number" step="0.1" id="mod-weight-user" class="w-24 bg-slate-900 border border-slate-700 rounded-lg p-3 text-right text-white font-bold focus:border-sky-500 outline-none"><span class="text-sm text-slate-400 shrink-0">kg</span></div></div>
+            <div class="flex justify-between items-center"><label class="text-base font-bold text-slate-300">신장 (키)</label><div class="flex items-center gap-2"><input type="number" id="mod-height" class="w-24 bg-slate-900 border border-slate-700 rounded-lg p-3 text-right text-white font-bold focus:border-sky-500 outline-none"><span class="text-sm text-slate-400 shrink-0">cm</span></div></div>
+            <div class="flex justify-between items-center"><label class="text-base font-bold text-rose-400">목표 체지방</label><div class="flex items-center gap-2"><input type="number" step="0.1" id="mod-bf" class="w-24 bg-slate-900 border border-slate-700 rounded-lg p-3 text-right text-rose-400 font-bold focus:border-rose-500 outline-none"><span class="text-sm text-slate-400 shrink-0">%</span></div></div>
+            <div class="flex justify-between items-center"><label class="text-base font-bold text-sky-400">목표 날짜</label><input type="date" id="mod-date" class="bg-slate-900 border border-slate-700 rounded-lg p-3 text-white font-bold focus:border-sky-500 outline-none"></div>
+        </div>
+        <div class="flex gap-3 mt-8"><button onclick="window.closeProfileModal()" class="flex-1 py-4 rounded-xl border border-slate-700 text-slate-300 font-bold hover:bg-slate-800 transition-colors text-lg">취소</button><button onclick="window.saveProfileModal()" class="flex-1 py-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition-colors text-lg">저장</button></div>
+    </div>
+</div>
+
+<div id="macro-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-fade-in border border-sky-500/40 shadow-2xl custom-scrollbar">
+        <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2">⚙️ 보충제 Database 관리</h3>
+        <p class="text-sm text-slate-400 mb-6">보충제의 1스쿱 기준 성분을 추가/수정하세요.</p>
+        <div id="custom-supp-list" class="space-y-4 mb-4"></div>
+        <button onclick="window.addCustomSuppForm()" class="w-full py-3 mb-6 border border-dashed border-slate-700 text-sky-400 text-base font-bold rounded-xl hover:bg-slate-800 transition-colors">+ 새 보충제 추가</button>
+        <div class="flex gap-3 mt-4 border-t border-slate-800 pt-5"><button onclick="window.closeMacroModal()" class="flex-1 py-4 rounded-xl border border-slate-700 text-slate-300 font-bold hover:bg-slate-800 transition-colors text-lg">취소</button><button onclick="window.saveMacroModal()" class="flex-1 py-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition-colors text-lg">전체 저장</button></div>
+    </div>
+</div>
+
+<div id="weight-record-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+    <div class="glass-panel p-5 sm:p-6 rounded-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in border border-sky-500/40 shadow-2xl custom-scrollbar">
+        <h3 class="text-lg font-bold text-white mb-1 flex items-center gap-2" id="record-modal-title">＋ 당일 종합 신체 및 건강 지표 기입</h3>
+        <p class="text-[11px] text-slate-400 mb-4">엑셀 시트 연동 변수 및 컨디션 평점을 구획별로 기입해 주십시오.</p>
+        
+        <div class="space-y-5 text-sm">
+            <div class="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <h4 class="text-xs font-black text-sky-400 uppercase tracking-wider">📐 구획 1: 기본 신체 및 시간 계측</h4>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">기록 일자</label><input type="date" id="record-date-input" class="bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-bold outline-none text-xs w-40" onchange="window.handleRecordDateChange(this.value)"></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">해당 요일</label><input type="text" id="record-day-display" readonly class="bg-slate-950 border border-slate-800 text-slate-400 rounded-lg p-2 text-center font-bold text-xs w-40 outline-none"></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-white">공복 체중</label><div class="flex items-center gap-1.5"><input type="number" step="0.01" inputmode="decimal" id="record-weight-input" class="w-24 bg-slate-950 border border-sky-500 rounded-lg p-2 text-right text-white font-black outline-none text-xs"><span class="text-xs text-slate-400">kg</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">총 수면시간</label><div class="flex items-center gap-1.5"><input type="number" step="0.1" inputmode="decimal" id="record-sleep-input" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs"><span class="text-xs text-slate-400">시간</span></div></div>
+            </div>
+
+            <div class="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <h4 class="text-xs font-black text-sky-400 uppercase tracking-wider">🏋️ 구획 2: 보디빌딩 소모 및 활동 지표</h4>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">공복 눈바디 평점</label><div class="flex items-center gap-1.5"><input type="number" inputmode="numeric" id="record-visual-input" min="1" max="10" placeholder="1~10" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-center text-white font-bold outline-none text-xs"><span class="text-xs text-slate-500">점</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">공복 심박수</label><div class="flex items-center gap-1.5"><input type="number" inputmode="numeric" id="record-hr-input" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs"><span class="text-xs text-slate-500">bpm</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">수행 운동부위</label><input type="text" id="record-part-input" placeholder="예: 하체 / 어깨" class="bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-bold outline-none text-xs w-48"></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">근력 트레이닝</label><div class="flex items-center gap-1.5"><input type="number" inputmode="numeric" id="record-anaerobic-input" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs"><span class="text-xs text-slate-400">분</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">체지방 컷 유산소</label><div class="flex items-center gap-1.5"><input type="number" inputmode="numeric" id="record-aerobic-input" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs"><span class="text-xs text-slate-400">분</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">당일 총 수분섭취</label><div class="flex items-center gap-1.5">
+                    <input type="number" step="0.1" inputmode="decimal" id="record-water-input" class="w-20 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs">
+                    <button type="button" onclick="document.getElementById('record-water-input').value = (parseFloat(document.getElementById('record-water-input').value)||0)+0.5" class="px-2 py-1 bg-slate-800 text-slate-300 rounded text-[10px] font-black active:bg-slate-700 select-none">+0.5L</button>
+                </div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">소화 대사 배변여부</label>
+                    <div class="grid grid-cols-2 gap-1 w-28 h-7 text-xs">
+                        <button type="button" id="btn-bowel-o" onclick="window.setBowelField('O')" class="bg-slate-950 border border-slate-700 text-slate-400 rounded-lg font-black transition-colors">O 성공</button>
+                        <button type="button" id="btn-bowel-x" onclick="window.setBowelField('X')" class="bg-slate-950 border border-slate-700 text-slate-400 rounded-lg font-black transition-colors">X 정체</button>
+                    </div>
+                </div>
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-400 block">종합 컨디션 레벨 평점</label>
+                    <div class="flex items-center gap-3 bg-slate-950 p-2.5 border border-slate-800 rounded-xl">
+                        <input type="range" id="record-condition-input" min="1" max="10" value="7" class="flex-1 accent-sky-500" oninput="document.getElementById('cond-val-lbl').innerText = this.value + '점'">
+                        <span id="cond-val-lbl" class="w-10 font-black text-center text-sky-400 text-xs shrink-0">7점</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                    <h4 class="text-xs font-black text-emerald-400 uppercase tracking-widest">🍱 3. 고정밀 식단 매크로 분석 구획</h4>
+                    <button type="button" onclick="window.pullDietaryMacrosFromPlanner()" class="px-2.5 py-1 bg-emerald-500 text-slate-950 text-[10px] font-black rounded-md shadow hover:bg-emerald-400 transition-all active:scale-95 shrink-0 whitespace-nowrap">
+                        📥 식단 세트 정보 불러오기
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">탄수화물 (g)</label><input type="number" id="record-carbs-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-white outline-none text-xs" inputmode="numeric"></div>
+                    <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">단백질 (g)</label><input type="number" id="record-protein-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-white outline-none text-xs" inputmode="numeric"></div>
+                    <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">지방 (g)</label><input type="number" id="record-fat-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-white outline-none text-xs" inputmode="numeric"></div>
+                    <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">총 칼로리 (kcal)</label><input type="number" id="record-kcal-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-black text-white outline-none text-xs" inputmode="numeric"></div>
+                </div>
+                <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-medium text-[11px]">탄:단:지 실질 열량 비율</span>
+                    <span id="record-ratio-display" class="font-black text-emerald-400 tracking-wider">0:0:0</span>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <h4 class="text-xs font-black text-purple-400 uppercase tracking-widest border-b border-slate-800/60 pb-1">📝 4. 특이사항 태그 및 기술서 구획</h4>
+                <div class="space-y-1">
+                    <label class="text-slate-400 text-xs font-medium block">특이사항 퀵 태그 배치</label>
+                    <div class="flex flex-wrap gap-1" id="quick-note-chips-box">
+                        <button type="button" onclick="window.toggleQuickNoteChip('정상식단')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">정상식단</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('외식기입')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">외식기입</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('치팅데이')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">치팅데이</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('탄수화물로딩')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">탄수화물로딩</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('수분조절밴딩')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">수분조절밴딩</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('가벼운음주')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">가벼운음주</button>
+                    </div>
+                </div>
+                <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">선택된 특이사항 칩 명세</label><input type="text" id="record-special-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-300 font-bold outline-none text-xs" placeholder="직접 기입하거나 상단 단추를 선택하십시오."></div>
+                <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">자유 형태 피드백 메모</label><textarea id="record-memo-input" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-medium text-white text-xs outline-none custom-scrollbar" placeholder="훈련 피드백 및 대사 징후 등을 상세히 기록하십시오."></textarea></div>
+            </div>
+        </div>
+
+        <div class="flex gap-3 mt-6 border-t border-slate-800 pt-4"><button onclick="window.closeRecordModal()" class="flex-1 py-3 rounded-xl border border-slate-700 text-slate-300 font-bold hover:bg-slate-800 transition-colors">취소합니다</button><button onclick="window.saveWeightRecordData()" class="flex-1 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition-colors">저장 완료합니다</button></div>
+    </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 min-h-[90vh]">
+    <header class="mb-4 sm:mb-6">
+        <h1 class="text-2xl sm:text-4xl font-black text-white text-center sm:text-left">PREP MASTER <span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-amber-400">PRO</span></h1>
+    </header>
+
+    <div id="tab-menu-container" class="w-full relative mb-6 sm:mb-8">
+        <div class="grid grid-cols-6 gap-1.5 sm:flex sm:flex-wrap sm:gap-2 border-b border-slate-800 pb-3 sm:pb-4">
+            <button onclick="window.switchMainTab('tab-timeline')" id="btn-tab-timeline" data-tab-btn="tab-timeline" class="nav-menu-btn active-tab">
+                <span class="nav-menu-icon">⏱️</span><span class="nav-menu-label"><span class="sm:hidden">식단</span><span class="hidden sm:inline">식단 플래너</span></span>
+            </button>
+            <button onclick="window.switchMainTab('tab-calculator')" id="btn-tab-calculator" data-tab-btn="tab-calculator" class="nav-menu-btn">
+                <span class="nav-menu-icon">🔄</span><span class="nav-menu-label"><span class="sm:hidden">변환기</span><span class="hidden sm:inline">스마트 변환기</span></span>
+            </button>
+            <button onclick="window.switchMainTab('tab-analysis')" id="btn-tab-analysis" data-tab-btn="tab-analysis" class="nav-menu-btn">
+                <span class="nav-menu-icon">🧬</span><span class="nav-menu-label"><span class="sm:hidden">입체분석</span><span class="hidden sm:inline">영양성분 입체분석</span></span>
+            </button>
+            <button onclick="window.switchMainTab('tab-weight-record')" id="btn-tab-weight-record" data-tab-btn="tab-weight-record" class="nav-menu-btn">
+                <span class="nav-menu-icon">📊</span><span class="nav-menu-label"><span class="sm:hidden">체중기록</span><span class="hidden sm:inline">체중 기록</span></span>
+            </button>
+            <button onclick="window.switchMainTab('tab-settings')" id="btn-tab-settings" data-tab-btn="tab-settings" class="nav-menu-btn">
+                <span class="nav-menu-icon">⚙️</span><span class="nav-menu-label"><span class="sm:hidden">설정</span><span class="hidden sm:inline">환경설정</span></span>
+            </button>
+
+            <a href="calendar.html" onclick="window.handleNavigationWithSave('calendar.html'); return false;" class="nav-menu-btn nav-menu-link">
+                <span class="nav-menu-icon">🏋️</span><span class="nav-menu-label"><span class="sm:hidden">캘린더</span><span class="hidden sm:inline">운동 캘린더</span></span>
+            </a>
+        </div>
+    </div>
+
+    <div class="flex justify-between items-center mb-3 px-1">
+        <h2 class="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-wider">📌 실시간 매크로 섭취 현황</h2>
+        <button id="btn-pin-macro-bar" onclick="window.showMacroBar()" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/50 border border-slate-700 text-slate-400 text-[11px] sm:text-xs font-bold rounded-lg transition-all active:scale-95 hover:text-white">
+            📌 하단고정
+        </button>
+    </div>
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="glass-panel p-5 sm:p-6 rounded-2xl border-l-4 border-slate-500 flex flex-col justify-center"><p class="text-slate-400 text-xs sm:text-sm font-bold uppercase mb-1">총 섭취 칼로리</p><h3 class="text-3xl sm:text-4xl font-black text-white"><span id="dash-kcal">0</span> <span class="text-sm text-slate-400">kcal</span></h3></div>
+        <div class="glass-panel p-4 sm:p-6 rounded-2xl border-l-4 border-amber-500 min-w-0"><p class="text-slate-400 text-xs sm:text-sm font-bold uppercase mb-1">탄수화물 (Carbs)</p><div id="dash-carbs" class="flex items-baseline gap-1 flex-wrap"><span class="text-2xl sm:text-4xl font-black text-amber-500">0g</span></div></div>
+        <div class="glass-panel p-4 sm:p-6 rounded-2xl border-l-4 border-emerald-500 min-w-0"><p class="text-slate-400 text-xs sm:text-sm font-bold uppercase mb-1">단백질 (Protein)</p><div id="dash-protein" class="flex items-baseline gap-1 flex-wrap"><span class="text-2xl sm:text-4xl font-black text-emerald-400">0g</span></div></div>
+        <div class="glass-panel p-4 sm:p-6 rounded-2xl border-l-4 border-sky-400 min-w-0"><p class="text-slate-400 text-xs sm:text-sm font-bold uppercase mb-1">지방 (Fat)</p><div id="dash-fat" class="flex items-baseline gap-1 flex-wrap"><span class="text-2xl sm:text-4xl font-black text-sky-400">0g</span></div></div>
+    </section>
+
+    <div id="tab-timeline" class="tab-content block space-y-4 animate-fade-in">
+        <div id="phase-tabs-container" class="flex gap-2 p-2 bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto no-scrollbar whitespace-nowrap shadow-inner"></div>
+        <div class="flex flex-wrap items-center gap-2 mb-4 px-1 pb-4 border-b border-slate-800/50">
+            <button onclick="window.openPhaseModal(true)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded border border-slate-700 transition-colors">+ 새 탭 추가</button>
+            <button onclick="window.openPhaseModal(false)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded border border-slate-700 transition-colors">✏️ 탭 수정</button>
+            <button onclick="window.copyPhase()" class="px-3 py-1.5 bg-sky-900/30 hover:bg-sky-800/50 text-sky-300 text-xs font-bold rounded border border-sky-700/50 transition-colors">📋 식단 세트 복사</button>
+            <button onclick="window.pastePhase()" class="px-3 py-1.5 bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 text-xs font-bold rounded border border-amber-700/50 transition-colors">📥 덮어쓰기 붙여넣기</button>
+            <button onclick="window.deletePhase()" class="px-3 py-1.5 bg-rose-900/30 hover:bg-rose-800/50 text-rose-300 text-xs font-bold rounded border border-rose-700/50 transition-colors ml-auto">🗑️ 현재 탭 삭제</button>
+        </div>
+        <p id="phase-description" class="text-sm sm:text-base text-sky-300 font-medium px-2 mb-4"></p>
+        
+        <div id="timeline-container" class="relative mt-6 pb-4"></div>
+        
+        <div class="mt-6 pb-20">
+            <button onclick="window.openEditMealModal(null, false)" class="w-full py-5 border-2 border-dashed border-slate-700 hover:border-sky-500/50 text-slate-400 hover:text-sky-400 rounded-2xl font-bold transition-colors text-lg">+ 새로운 일정 추가</button>
+        </div>
+    </div>
+
+    <div id="tab-calculator" class="tab-content hidden space-y-6 animate-fade-in pb-20">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800">
+            <h2 class="text-xl sm:text-2xl font-black text-white flex items-center gap-2 mb-2"><span class="w-2 h-6 bg-sky-500 rounded-full"></span> 스마트 매크로 변환기</h2>
+            <p class="text-slate-400 text-base mb-6 break-keep">기준 식품과 중량을 입력하면 동일 카테고리 내 대체 식품들의 <span class="text-amber-400 font-bold">등가 중량(g)</span>을 자동 연산합니다.</p>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+                    <label class="block text-base font-extrabold text-amber-500 mb-3">🌾 탄수화물 베이스</label>
+                    <div class="flex gap-2 mb-4">
+                        <select id="calc-carb-src" class="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-base font-bold text-white outline-none" onchange="window.runSmartCalc('carb')"></select>
+                        <div class="w-1/2 flex items-center gap-2"><input type="number" id="calc-carb-amt" value="130" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-base font-bold text-white outline-none" oninput="window.runSmartCalc('carb')"><span class="text-slate-400 text-sm font-bold">g</span></div>
+                    </div>
+                    <div id="calc-carb-res" class="space-y-1 mt-4 border-t border-slate-800 pt-4 custom-scrollbar max-h-48 overflow-y-auto pr-1"></div>
+                </div>
+                <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+                    <label class="block text-base font-extrabold text-emerald-500 mb-3">🥩 단백질 베이스</label>
+                    <div class="flex gap-2 mb-4">
+                        <select id="calc-pro-src" class="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-base font-bold text-white outline-none" onchange="window.runSmartCalc('pro')"></select>
+                        <div class="w-1/2 flex items-center gap-2"><input type="number" id="calc-pro-amt" value="150" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-base font-bold text-white outline-none" oninput="window.runSmartCalc('pro')"><span class="text-slate-400 text-sm font-bold">g</span></div>
+                    </div>
+                    <div id="calc-pro-res" class="space-y-1 mt-4 border-t border-slate-800 pt-4 custom-scrollbar max-h-48 overflow-y-auto pr-1"></div>
+                </div>
+                <div class="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+                    <label class="block text-base font-extrabold text-sky-500 mb-3">🥑 지방 베이스</label>
+                    <div class="flex gap-2 mb-4">
+                        <select id="calc-fat-src" class="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-base font-bold text-white outline-none" onchange="window.runSmartCalc('fat')"></select>
+                        <div class="w-1/2 flex items-center gap-2"><input type="number" id="calc-fat-amt" value="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-base font-bold text-white outline-none" oninput="window.runSmartCalc('fat')"><span class="text-slate-400 text-sm font-bold">g</span></div>
+                    </div>
+                    <div id="calc-fat-res" class="space-y-1 mt-4 border-t border-slate-800 pt-4 custom-scrollbar max-h-48 overflow-y-auto pr-1"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-analysis" class="tab-content hidden space-y-6 animate-fade-in pb-20">
+        <h2 class="text-lg sm:text-xl font-black text-white flex items-center gap-2"><span class="w-2 h-5 bg-amber-500 rounded-full"></span> 영양소 입체 분석 리포트</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800">
+                <h3 class="text-base font-bold text-slate-200 mb-6 text-center">전체 섭취 매크로 비중</h3>
+                <div class="relative w-full h-[300px] flex justify-center items-center"><canvas id="chart-pie-macros"></canvas></div>
+            </div>
+            <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-slate-800">
+                <h3 class="text-base font-bold text-slate-200 mb-6 flex items-center gap-2">🔎 영양소별 제공 출처 분석</h3>
+                <div class="space-y-6 overflow-y-auto max-h-[400px] custom-scrollbar pr-2">
+                    <div><div class="flex justify-between text-sm mb-2"><span class="font-bold text-amber-500">탄수화물 (Carbs)</span><span class="text-slate-400 font-bold" id="src-total-c">0g (0%)</span></div><div id="src-list-c" class="space-y-3"></div></div>
+                    <div><div class="flex justify-between text-sm mb-2"><span class="font-bold text-emerald-500">단백질 (Protein)</span><span class="text-slate-400 font-bold" id="src-total-p">0g (0%)</span></div><div id="src-list-p" class="space-y-3"></div></div>
+                    <div><div class="flex justify-between text-sm mb-2"><span class="font-bold text-sky-500">지방 (Fat)</span><span class="text-slate-400 font-bold" id="src-total-f">0g (0%)</span></div><div id="src-list-f" class="space-y-3"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-weight-record" class="tab-content hidden space-y-5 pb-20 animate-fade-in">
+        <div class="w-full overflow-x-auto no-scrollbar pb-1">
+            <div class="flex gap-2 min-w-max">
+                <button id="chip-filter-all" onclick="window.setMatrixFilter('all')" class="px-4 py-2 text-xs font-black rounded-xl bg-slate-900 border border-slate-800 text-slate-300 transition-all matrix-chip-active">전체 종합</button>
+                <button id="chip-filter-weight" onclick="window.setMatrixFilter('weight')" class="px-4 py-2 text-xs font-bold rounded-xl bg-slate-900 border border-slate-800 text-slate-400 transition-all">체중 지표</button>
+                <button id="chip-filter-macros" onclick="window.setMatrixFilter('macros')" class="px-4 py-2 text-xs font-bold rounded-xl bg-slate-900 border border-slate-800 text-slate-400 transition-all">영양소 합산</button>
+                <button id="chip-filter-condition" onclick="window.setMatrixFilter('condition')" class="px-4 py-2 text-xs font-bold rounded-xl bg-slate-900 border border-slate-800 text-slate-400 transition-all">컨디션/대사</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4" id="kpi-cards-grid">
+            <div id="kpi-card-weight" class="glass-panel p-5 rounded-2xl border border-slate-400 transition-all duration-300">
+                <span class="text-xs font-bold text-amber-500 block uppercase mb-1">평균 공복체중</span>
+                <h3 id="kpi-display-weight" class="text-2xl font-black text-white">-- kg</h3>
+                <p id="kpi-sub-weight" class="text-xs text-slate-400 font-medium mt-1">주간 격차: --</p>
+            </div>
+            <div id="kpi-card-macros" class="glass-panel p-5 rounded-2xl border border-slate-800 transition-all duration-300">
+                <span class="text-xs font-bold text-emerald-400 block uppercase mb-1">주간 평균 영양</span>
+                <h3 id="kpi-display-kcal" class="text-2xl font-black text-white">-- kcal</h3>
+                <p id="kpi-sub-macros" class="text-xs text-slate-400 font-medium mt-1">탄단지: --g</p>
+            </div>
+            <div id="kpi-card-condition" class="glass-panel p-5 rounded-2xl border border-slate-800 col-span-2 transition-all duration-300 flex justify-between items-center">
+                <div>
+                    <span class="text-xs font-bold text-sky-400 block uppercase mb-0.5">대사 및 컨디션 평점</span>
+                    <h4 id="kpi-display-cond" class="text-sm font-black text-slate-200">평균 수면: --시간 | 컨디션: --점</h4>
+                </div>
+                <div class="text-right">
+                    <span id="kpi-display-bowel" class="text-xs font-bold px-3 py-1.5 bg-slate-950 border border-slate-800 text-slate-300 rounded-xl">배변 빈도: --%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-sm font-black text-slate-200 pl-2 border-l-4 border-sky-500">📈 시계열 복합 추세 분석 차트</h3>
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">최근 7일 추이</span>
+            </div>
+            <div class="w-full h-[280px] sm:h-[350px] relative">
+                <canvas id="chart-weight-trend-mix"></canvas>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <button onclick="window.exportWeightRecordsToCSV()" class="py-3.5 bg-slate-800/50 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold rounded-xl transition-all shadow-md active:scale-95 text-center">
+                📤 엑셀로 내보내기
+            </button>
+            <button onclick="document.getElementById('hidden-excel-file-input').click()" class="py-3.5 bg-slate-800/50 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold rounded-xl transition-all shadow-md active:scale-95 text-center">
+                📥 엑셀 불러오기
+            </button>
+            <input type="file" id="hidden-excel-file-input" class="hidden" accept=".csv" onchange="window.importWeightRecordsFromCSV(event)">
+        </div>
+
+        <div class="space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800/60 pb-3">
+                <h3 class="text-sm font-black text-slate-400 uppercase tracking-wider">📋 종합 건강 기록 데이터 로그 타임라인</h3>
+                <button onclick="window.openRecordModal()" class="px-3 py-2 bg-sky-600/20 border border-sky-500/40 text-sky-400 text-xs font-bold rounded-xl transition-all active:scale-95">
+                    ＋ 당일 종합 지표 기록하기
+                </button>
+            </div>
+            <div id="weight-records-timeline-container" class="space-y-3"></div>
+        </div>
+    </div>
+
+    <div id="tab-settings" class="tab-content hidden space-y-6 animate-fade-in pb-20">
+        <h2 class="text-lg sm:text-xl font-black text-white flex items-center gap-2"><span class="w-2 h-5 bg-sky-500 rounded-full"></span> 환경설정 & 백업</h2>
+
+        <div class="flex flex-wrap gap-2">
+            <span id="badge-target-date" class="px-3 py-1 text-[11px] font-bold uppercase bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full">Target Date: --.--</span>
+            <span id="cloud-status" class="px-3 py-1 text-[11px] font-bold uppercase bg-slate-800 text-slate-300 border border-slate-700 rounded-full flex items-center gap-1.5"><span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span> 로딩 인프라 체크 중</span>
+        </div>
+
+        <div class="flex justify-between gap-2 sm:gap-4 glass-panel p-4 sm:p-5 rounded-2xl border-slate-800/50 cursor-pointer hover:border-sky-500/50" onclick="window.openProfileModal()">
+            <div class="text-center flex-1 px-2 sm:px-5 py-1 border-r border-slate-800"><p class="text-slate-500 text-xs font-bold uppercase">Target BF</p><p class="text-2xl font-extrabold text-rose-400" id="prof-bf-display">-.-%</p></div>
+            <div class="text-center flex-1 px-2 sm:px-5 py-1 border-r border-slate-800"><p class="text-slate-500 text-xs font-bold uppercase">Height</p><p class="text-2xl font-extrabold text-slate-200" id="prof-height-display">---cm</p></div>
+            <div class="text-center flex-1 px-2 sm:px-5 py-1"><p class="text-slate-500 text-xs font-bold uppercase">Weight</p><p class="text-2xl font-extrabold text-slate-200" id="prof-weight-display">--.-kg</p></div>
+        </div>
+
+        <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-4">
+            <h3 class="text-sm font-black text-amber-500 uppercase tracking-wider border-b border-slate-800 pb-2">🗂️ 데이터 관리</h3>
+            <div class="grid grid-cols-2 gap-2">
+                <input type="file" id="import-file" accept=".json" style="display:none;" onchange="window.importData(event)">
+                <button onclick="window.exportData()" class="px-3 py-3 text-xs font-bold bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">💾 위치 지정 백업 내보내기</button>
+                <button onclick="document.getElementById('import-file').click()" class="px-3 py-3 text-xs font-bold bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">📂 JSON 백업 복원</button>
+                <button onclick="window.openProfileModal()" class="px-3 py-3 text-xs font-bold bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors">👤 프로필 설정</button>
+                <button onclick="window.openMacroModal()" class="px-3 py-3 text-xs font-bold bg-sky-900/30 hover:bg-sky-800/50 text-sky-300 rounded-lg border border-sky-700/50 transition-colors">⚙️ 보충제 DB 관리</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="js/diet/app.js"></script>
+
+<footer class="mt-8 pb-8 text-center text-slate-500 text-xs px-4 border-t border-slate-800/80 pt-6">
+    <p>제공되는 대사량 수치 등은 일반 통계 기준 근사치이므로 정확하지 않을 수 있기 때문에 확인이 필요합니다.</p>
+</footer>
+</body>
+</html>
