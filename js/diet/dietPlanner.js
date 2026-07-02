@@ -6,6 +6,10 @@
 import { state } from '../core/store.js';
 import { triggerSave } from '../core/services.js';
 import { showToast } from './uiChrome.js';
+import { reorderArray, moveArrayItem } from '../core/reorderUtil.js';
+import { reorderButtonsHTML, initSortableList } from '../core/reorderControls.js';
+
+let timelineSortable = null;
 
 export function renderPhaseTabs() {
     const container = document.getElementById('phase-tabs-container');
@@ -77,6 +81,7 @@ export function loadPhase(phaseId) {
                         <input type="time" onchange="window.updateMealField(${mIdx}, 'time', event.target.value)" value="${meal.time}" class="order-2 sm:order-1 bg-transparent text-white font-black text-3xl sm:text-2xl tracking-tighter cursor-pointer p-0 -ml-1 sm:ml-0">
                     </div>
                     <div class="flex gap-2 items-center self-end sm:self-auto shrink-0 mt-2 sm:mt-0" onclick="event.stopPropagation()">
+                        ${reorderButtonsHTML('moveMealOrder', mIdx, cp.meals.length)}
                         <button onclick="window.openEditMealModal(${mIdx}, true)" class="text-xs sm:text-sm px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded border border-slate-700 transition-colors">📋 복제</button>
                         <button onclick="window.openEditMealModal(${mIdx}, false)" class="text-xs sm:text-sm px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors">⚙️ 수정</button>
                         <button onclick="window.deleteMeal(${mIdx})" class="text-xs sm:text-sm px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded border border-slate-700 transition-colors">🗑️ 삭제</button>
@@ -97,22 +102,21 @@ export function loadPhase(phaseId) {
         </div>`;
     });
 
-    if (typeof Sortable !== 'undefined' && document.getElementById('timeline-container')) {
-        if (window.timelineSortable) { window.timelineSortable.destroy(); }
-        window.timelineSortable = new Sortable(document.getElementById('timeline-container'), {
-            handle: '.drag-handle', animation: 250, ghostClass: 'opacity-10',
-            delay: 150, delayOnTouchOnly: true, forceFallback: false,
-            onEnd: function (evt) {
-                const oldIdx = evt.oldIndex; const newIdx = evt.newIndex; if (oldIdx === newIdx) return;
-                const phase = state.phases.find(p => p.id === state.currentPhaseId);
-                const movedItem = phase.meals.splice(oldIdx, 1)[0];
-                phase.meals.splice(newIdx, 0, movedItem);
-                triggerSave(showToast); setTimeout(() => loadPhase(state.currentPhaseId), 10);
-            }
-        });
-    }
+    if (timelineSortable) { timelineSortable.destroy(); timelineSortable = null; }
+    timelineSortable = initSortableList(container, {
+        handle: '.drag-handle',
+        onReorder: (oldIdx, newIdx) => {
+            const phase = state.phases.find(p => p.id === state.currentPhaseId);
+            if (moveArrayItem(phase.meals, oldIdx, newIdx)) { triggerSave(showToast); setTimeout(() => loadPhase(state.currentPhaseId), 10); }
+        },
+    });
 
     calculateMacros();
+}
+
+export function moveMealOrder(mIdx, action) {
+    const cp = state.phases.find(p => p.id === state.currentPhaseId);
+    if (reorderArray(cp.meals, mIdx, action)) { triggerSave(showToast); loadPhase(state.currentPhaseId); }
 }
 
 export function toggleMealWorkout(mIdx, isChecked) {

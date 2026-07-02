@@ -2,11 +2,12 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <title>PREP MASTER PRO - Workout Record Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
         body { font-family: 'Pretendard', 'Inter', sans-serif; background-color: #090D16; color: #F8FAFC; -webkit-tap-highlight-color: transparent; }
@@ -179,41 +180,58 @@
 
     <section id="pane-tab-routine" class="calendar-pane space-y-4 hidden animate-fade-in">
         <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-            <h2 class="text-xl font-black text-white">📋 분할 루틴 프리셋 프로그램</h2>
+            <h2 class="text-xl font-black text-white">📋 분할 루틴</h2>
             <button onclick="window.openTemplateManager()" class="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-xs font-bold border border-slate-700">백업 보존실</button>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="routine-preset-grid-box"></div>
     </section>
 
     <section id="pane-tab-alarm" class="calendar-pane space-y-4 hidden animate-fade-in">
-        <div class="glass-panel p-6 rounded-2xl border border-slate-800 shadow-xl max-w-lg mx-auto">
-            <h2 class="text-xl font-black text-amber-500 mb-6 flex items-center gap-2">⏰ 수동 휴식 알람 신디사이징</h2>
+        <div class="glass-panel p-4 sm:p-6 rounded-2xl border border-slate-800 shadow-xl max-w-lg mx-auto">
+            <h2 class="text-xl font-black text-amber-500 mb-6 flex items-center gap-2">⏰ 수동 알람</h2>
             <div class="space-y-5">
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 mb-2">알람 주파수 형태</label>
-                    <select id="alarm-sound-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none">
-                        <option value="1">1. 기본 숏 비프 (Clear Alert)</option>
-                        <option value="2">2. 마림바 아르페지오 (Radar Marimba)</option>
-                        <option value="3">3. 트라이앵글 멜로디 (Morning Arpeggio)</option>
-                        <option value="4">4. 강력 스퀘어 파형 (Siren Alert)</option>
-                        <option value="5">5. 부드러운 가상 사인파 (Gentle Lullaby)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 mb-2">알람 비프 속도 주기</label>
-                    <select id="alarm-interval-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none">
-                        <option value="500">초고속 (0.5초 간격)</option><option value="800">고속 (0.8초 간격)</option>
-                        <option value="1000" selected>표준 (1.0초 간격)</option><option value="1500">저속 (1.5초 간격)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 mb-2">타이머 시간 지정 (초)</label>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="manual-timer-sec" value="60" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 text-center text-lg font-black text-white outline-none">
-                        <span class="text-slate-500 font-bold">초</span>
+                <div class="flex flex-wrap gap-3">
+                    <div class="flex-1 min-w-[140px]">
+                        <label class="block text-xs font-bold text-slate-400 mb-2">알람음</label>
+                        <select id="alarm-sound-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none">
+                            <option value="1">1. 기본 비프</option>
+                            <option value="2">2. 마림바</option>
+                            <option value="3">3. 트라이앵글</option>
+                            <option value="4">4. 강력 사이렌</option>
+                            <option value="5">5. 사인파</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 min-w-[120px]">
+                        <label class="block text-xs font-bold text-slate-400 mb-2">반복 간격</label>
+                        <select id="alarm-interval-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none">
+                            <option value="500">0.5초</option><option value="800">0.8초</option>
+                            <option value="1000" selected>1.0초</option><option value="1500">1.5초</option>
+                        </select>
                     </div>
                 </div>
-                <div class="grid grid-cols-4 gap-2 pt-2">
+                <div class="flex flex-wrap gap-3">
+                    <div class="flex-1 min-w-[120px]">
+                        <label class="block text-xs font-bold text-slate-400 mb-2">반복 횟수</label>
+                        <select id="alarm-repeat-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none">
+                            <option value="1">1번</option><option value="3">3번</option><option value="5">5번</option>
+                            <option value="10">10번</option><option value="infinite" selected>계속</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 min-w-[120px] flex items-end">
+                        <label class="w-full flex items-center justify-between gap-2 bg-slate-900 border border-slate-700 rounded-xl p-3 cursor-pointer select-none">
+                            <span class="text-xs font-bold text-slate-400">진동 알림</span>
+                            <input type="checkbox" id="alarm-vibration-toggle" onchange="window.saveSystemSettings()" class="w-5 h-5 accent-amber-500 cursor-pointer">
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-2">시간 (초)</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="manual-timer-sec" value="60" class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl p-3 text-center text-lg font-black text-white outline-none">
+                        <span class="text-slate-500 font-bold shrink-0">초</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 min-[380px]:grid-cols-4 gap-2 pt-2">
                     <button onclick="document.getElementById('manual-timer-sec').value = 30" class="py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg border border-slate-700">30초</button>
                     <button onclick="document.getElementById('manual-timer-sec').value = 60" class="py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg border border-slate-700">60초</button>
                     <button onclick="document.getElementById('manual-timer-sec').value = 90" class="py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg border border-slate-700">90초</button>
@@ -259,28 +277,38 @@
             <span id="cloud-status-workout" class="px-3 py-1 text-[11px] font-bold uppercase bg-slate-800 text-slate-300 border border-slate-700 rounded-full flex items-center gap-1.5"><span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span> 인프라 마운트 확인</span>
         </div>
         <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-4">
-            <h3 class="text-sm font-black text-amber-500 uppercase tracking-wider border-b border-slate-800 pb-2">⏱️ 전역 시스템 설정</h3>
+            <h3 class="text-sm font-black text-amber-500 uppercase tracking-wider border-b border-slate-800 pb-2">⏱️ 알람 기본값</h3>
             <div class="space-y-4">
-                <div class="flex justify-between items-center">
-                    <label class="text-xs font-bold text-slate-400">기본 휴식 시간 (초)</label>
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <label class="text-xs font-bold text-slate-400">기본 휴식 시간(초)</label>
                     <input type="number" id="setting-default-rest" value="90" onchange="window.saveSystemSettings()" class="w-20 bg-slate-900 border border-slate-700 rounded-lg p-2 text-center text-sm font-black text-white outline-none">
                 </div>
-                <div class="flex justify-between items-center">
-                    <label class="text-xs font-bold text-slate-400">전역 기본 알람 톤</label>
-                    <select id="setting-default-sound" onchange="window.saveSystemSettings()" class="w-40 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white outline-none">
-                        <option value="1">기본 숏 비프</option><option value="2">마림바 톤</option><option value="3">아르페지오 멜로디</option><option value="4">강력 사이렌</option><option value="5">사인 오실레이터</option>
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <label class="text-xs font-bold text-slate-400">기본 알람음</label>
+                    <select id="setting-default-sound" onchange="window.saveSystemSettings()" class="flex-1 max-w-[10rem] bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white outline-none">
+                        <option value="1">기본 비프</option><option value="2">마림바</option><option value="3">트라이앵글</option><option value="4">강력 사이렌</option><option value="5">사인파</option>
                     </select>
                 </div>
-                <div class="flex justify-between items-center">
-                    <label class="text-xs font-bold text-slate-400">자동반복 간격 주기</label>
-                    <select id="setting-default-interval" onchange="window.saveSystemSettings()" class="w-40 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white outline-none">
-                        <option value="500">빠름 (0.5초)</option><option value="800">보통속도 (0.8초)</option><option value="1000">표준주기 (1.0초)</option><option value="1500">여유롭게 (1.5초)</option>
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <label class="text-xs font-bold text-slate-400">반복 간격</label>
+                    <select id="setting-default-interval" onchange="window.saveSystemSettings()" class="flex-1 max-w-[10rem] bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white outline-none">
+                        <option value="500">0.5초</option><option value="800">0.8초</option><option value="1000">1.0초</option><option value="1500">1.5초</option>
                     </select>
+                </div>
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <label class="text-xs font-bold text-slate-400">반복 횟수</label>
+                    <select id="setting-default-repeat" onchange="window.saveSystemSettings()" class="flex-1 max-w-[10rem] bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white outline-none">
+                        <option value="1">1번</option><option value="3">3번</option><option value="5">5번</option><option value="10">10번</option><option value="infinite">계속</option>
+                    </select>
+                </div>
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <label class="text-xs font-bold text-slate-400">진동 알림</label>
+                    <input type="checkbox" id="setting-default-vibration" onchange="window.saveSystemSettings()" class="w-5 h-5 accent-amber-500 cursor-pointer">
                 </div>
             </div>
         </div>
         <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-4">
-            <h3 class="text-sm font-black text-amber-500 uppercase tracking-wider border-b border-slate-800 pb-2">📂 로컬 데이터 인프라 관리</h3>
+            <h3 class="text-sm font-black text-amber-500 uppercase tracking-wider border-b border-slate-800 pb-2">📂 로컬 백업</h3>
             <div class="grid grid-cols-2 gap-2">
                 <button onclick="window.triggerSettingExport()" class="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-200 rounded-xl border border-slate-700">로컬 지정 위치 백업</button>
                 <input type="file" id="setting-import-file" accept=".json" style="display:none;" onchange="window.triggerSettingImport(event)">
@@ -290,7 +318,7 @@
         </div>
 
         <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-4">
-            <h3 class="text-sm font-black text-emerald-500 uppercase tracking-wider border-b border-slate-800 pb-2">☁️ 온라인 백업 (Supabase)</h3>
+            <h3 class="text-sm font-black text-emerald-500 uppercase tracking-wider border-b border-slate-800 pb-2">☁️ 온라인 백업</h3>
             <p class="text-[11px] text-slate-400 -mt-2">Google 계정으로 로그인하면 데이터를 온라인에도 백업하고, 다른 기기에서 복원할 수 있습니다. 로그인하지 않아도 로컬 백업만으로 기존과 동일하게 사용 가능합니다.</p>
             <div class="flex items-center justify-between gap-2">
                 <span id="cloud-auth-status" class="text-xs font-bold text-slate-400">로딩 중...</span>
@@ -313,7 +341,7 @@
 <div id="library-modal" class="fixed inset-0 z-[160] hidden items-center justify-center bg-black/85 backdrop-blur-sm px-4">
     <div class="glass-panel p-5 sm:p-6 rounded-3xl w-full max-w-lg h-[85vh] max-h-[85vh] flex flex-col border border-sky-500/30 shadow-2xl overflow-hidden animate-fade-in">
         <div class="flex justify-between items-center mb-3 shrink-0">
-            <h3 class="text-base font-black text-white">📚 초성 지원 계층형 종목 사전</h3>
+            <h3 class="text-base font-black text-white">📚 종목 사전</h3>
             <button onclick="window.closeLibraryModal()" class="text-slate-400 hover:text-white font-black text-sm px-2 py-1">✕</button>
         </div>
         

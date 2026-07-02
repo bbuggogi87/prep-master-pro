@@ -24,7 +24,8 @@ import {
     openTemplateManager, closeTemplateManager, applyTemplate, deleteTemplate, openSaveRoutineModal,
     closeSaveRoutineModal, confirmSaveRoutine, applyDirectPresetRoutine, renderPresetRoutineGrid,
     openTemplatePopupEditor, closeTemplatePopupEditor, addSetToEditor, deleteSetFromEditor,
-    deleteExerciseFromEditor, changeEditorSetField, saveTemplatePopupEditorData, moveSetOrderInEditor
+    deleteExerciseFromEditor, changeEditorSetField, saveTemplatePopupEditorData, moveSetOrderInEditor,
+    moveExerciseOrderInEditor
 } from './routineTemplates.js';
 import {
     renderCalendarGrid, moveMonth, selectWorkoutDate, updateHomeDashboardWidgets, updateDdayBadge,
@@ -96,6 +97,7 @@ window.saveTemplatePopupEditorData = saveTemplatePopupEditorData;
 window.clearDailyExercises = clearDailyExercises;
 window.moveSetOrder = moveSetOrder;
 window.moveSetOrderInEditor = moveSetOrderInEditor;
+window.moveExerciseOrderInEditor = moveExerciseOrderInEditor;
 window.triggerLibraryAddFromEditor = triggerLibraryAddFromEditor;
 window.moveExerciseOrder = moveExerciseOrder;
 window.initCalendarModule = initCalendarModule;

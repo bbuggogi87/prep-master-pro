@@ -3,6 +3,9 @@
  * 역할: 휴식 타이머 카운트다운 및 Web Audio API 기반 알람음 신디사이징 엔진
  * 종목별 휴식 타이머(workoutJournal.js)와 수동 알람(calendarSettings.js) 양쪽에서 공유하는 하위 엔진이며,
  * 특정 종목/일지 데이터에는 의존하지 않는다(초 단위 시간과 알람음 종류만 파라미터로 받는다).
+ * [알람 기능 확장] 반복 횟수 제한(1/3/5/10/계속), 진동(navigator.vibrate), 백그라운드 탭에서 완료 시
+ * 브라우저 알림(Web Notification API)을 지원한다. 안드로이드 APK 버전은 동일 UI/설정을 공유하되 내부적으로
+ * Capacitor Haptics/LocalNotifications를 사용한다(플랫폼별 구현만 다르고 사용자 경험은 동일).
  */
 
 import { state } from '../core/store.js';
@@ -11,6 +14,23 @@ let restTimerInterval = null;
 let alarmAudioInterval = null;
 let currentTimerSeconds = 0;
 let currentAlarmSound = '1';
+let alarmRingCount = 0;
+
+function requestNotificationPermissionOnce() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+}
+
+function notifyIfBackground() {
+    if (document.visibilityState !== 'hidden') return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try { new Notification('⏱️ 타이머 종료!', { body: '설정한 시간이 모두 지났습니다.' }); } catch (e) { /* 무시 */ }
+}
+
+function triggerVibration() {
+    if (state.userInfo?.vibrationEnabled === false) return; // 기본값 켜짐
+    if (navigator.vibrate) { try { navigator.vibrate([200, 100, 200]); } catch (e) { /* 무시 */ } }
+}
 
 function playAudioTone(type) {
     try {
@@ -55,10 +75,23 @@ function triggerAlarmRing(soundType) {
     document.getElementById('timer-controls-extend').classList.remove('hidden'); document.getElementById('timer-controls-extend').classList.add('flex');
     document.getElementById('timer-pulse-dot').classList.remove('bg-rose-500'); document.getElementById('timer-pulse-dot').classList.add('bg-amber-500');
 
-    playAudioTone(soundType);
+    notifyIfBackground();
+
+    const repeatSetting = state.userInfo?.alarmRepeatCount || 'infinite';
+    const maxRings = repeatSetting === 'infinite' ? Infinity : (parseInt(repeatSetting) || 1);
+    alarmRingCount = 0;
+
+    const ring = () => {
+        alarmRingCount++;
+        playAudioTone(soundType);
+        triggerVibration();
+        if (alarmRingCount >= maxRings) { if (alarmAudioInterval) clearInterval(alarmAudioInterval); }
+    };
+
+    ring();
     if(alarmAudioInterval) clearInterval(alarmAudioInterval);
     let userInterval = state.userInfo?.alarmInterval || 1000;
-    alarmAudioInterval = setInterval(() => { playAudioTone(soundType); }, userInterval);
+    if (maxRings > 1) alarmAudioInterval = setInterval(ring, userInterval);
 }
 
 export function stopRestTimer() {
@@ -79,6 +112,7 @@ export function extendRestTimer(secondsToAdd) {
 export function startTimerLogic(seconds, soundType) {
     if (restTimerInterval) clearInterval(restTimerInterval);
     if (alarmAudioInterval) clearInterval(alarmAudioInterval);
+    requestNotificationPermissionOnce();
 
     currentTimerSeconds = seconds; currentAlarmSound = soundType || '1';
     const bar = document.getElementById('timer-floating-bar');

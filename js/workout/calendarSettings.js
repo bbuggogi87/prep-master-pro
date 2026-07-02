@@ -13,14 +13,24 @@ export function saveSystemSettings() {
     const setRest = document.getElementById('setting-default-rest');
     const setSound = document.getElementById('setting-default-sound');
     const setInt = document.getElementById('setting-default-interval');
+    const setRepeat = document.getElementById('setting-default-repeat');
+    const setVibration = document.getElementById('setting-default-vibration');
     const alarmInt = document.getElementById('alarm-interval-select');
+    const alarmRepeat = document.getElementById('alarm-repeat-select');
+    const alarmVibration = document.getElementById('alarm-vibration-toggle');
 
     if (setRest) state.userInfo.defaultRestTime = parseInt(setRest.value) || 90;
     if (setSound) state.userInfo.defaultAlarmSound = setSound.value || '1';
-    if (document.getElementById('pane-tab-alarm') && !document.getElementById('pane-tab-alarm').classList.contains('hidden')) {
+
+    const onAlarmTab = document.getElementById('pane-tab-alarm') && !document.getElementById('pane-tab-alarm').classList.contains('hidden');
+    if (onAlarmTab) {
         state.userInfo.alarmInterval = parseInt(alarmInt.value) || 1000;
+        if (alarmRepeat) state.userInfo.alarmRepeatCount = alarmRepeat.value;
+        if (alarmVibration) state.userInfo.vibrationEnabled = alarmVibration.checked;
     } else {
         if (setInt) state.userInfo.alarmInterval = parseInt(setInt.value) || 1000;
+        if (setRepeat) state.userInfo.alarmRepeatCount = setRepeat.value;
+        if (setVibration) state.userInfo.vibrationEnabled = setVibration.checked;
     }
     triggerSave(showToast); loadSystemSettings();
 }
@@ -29,27 +39,40 @@ export function loadSystemSettings() {
     const dRest = state.userInfo?.defaultRestTime || 90;
     const dSound = state.userInfo?.defaultAlarmSound || '1';
     const dInt = state.userInfo?.alarmInterval || 1000;
+    const dRepeat = state.userInfo?.alarmRepeatCount || 'infinite';
+    const dVibration = state.userInfo?.vibrationEnabled !== false; // 기본값 켜짐
 
     const restEl = document.getElementById('setting-default-rest');
     const soundEl = document.getElementById('setting-default-sound');
     const intEl = document.getElementById('setting-default-interval');
+    const repeatEl = document.getElementById('setting-default-repeat');
+    const vibrationEl = document.getElementById('setting-default-vibration');
     const alarmIntEl = document.getElementById('alarm-interval-select');
     const alarmSoundEl = document.getElementById('alarm-sound-select');
+    const alarmRepeatEl = document.getElementById('alarm-repeat-select');
+    const alarmVibrationEl = document.getElementById('alarm-vibration-toggle');
 
     if(restEl) restEl.value = dRest;
     if(soundEl) soundEl.value = dSound;
     if(intEl) intEl.value = dInt;
+    if(repeatEl) repeatEl.value = dRepeat;
+    if(vibrationEl) vibrationEl.checked = dVibration;
     if(alarmIntEl) alarmIntEl.value = dInt;
     if(alarmSoundEl) alarmSoundEl.value = dSound;
+    if(alarmRepeatEl) alarmRepeatEl.value = dRepeat;
+    if(alarmVibrationEl) alarmVibrationEl.checked = dVibration;
 }
 
 export function startGlobalAlarm() {
     const sec = parseInt(document.getElementById('manual-timer-sec').value) || 60;
     const soundType = document.getElementById('alarm-sound-select').value || '1';
     const interval = parseInt(document.getElementById('alarm-interval-select').value) || 1000;
+    const repeatCount = document.getElementById('alarm-repeat-select')?.value || 'infinite';
+    const vibrationEnabled = document.getElementById('alarm-vibration-toggle')?.checked ?? true;
 
     if(!state.userInfo) state.userInfo = {};
     state.userInfo.defaultAlarmSound = soundType; state.userInfo.alarmInterval = interval;
+    state.userInfo.alarmRepeatCount = repeatCount; state.userInfo.vibrationEnabled = vibrationEnabled;
     triggerSave(showToast); loadSystemSettings(); startTimerLogic(sec, soundType);
 }
 

@@ -9,6 +9,9 @@ import { showToast } from './uiChrome.js';
 
 let mixChartInstance = null;
 let selectedBowelValue = '';
+let timelineLimit = 10; // [페이지네이션] "더보기"를 누를 때마다 10씩 증가, "닫기"로 10으로 복귀
+let wrCalYear, wrCalMonth; // [캘린더 조회] 체중기록 전용 월 캘린더의 현재 연/월(초기값은 initWeightCalendar에서 오늘로 설정)
+let wrCalSelectedDate = null;
 
 /**
  * 건강 지표 대시보드 일자별 아코디언 카드 펼침/접힘 토글 함수
@@ -21,23 +24,23 @@ export function toggleAccordionCard(dateStr) {
     if (arrow) arrow.style.transform = details.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
-export function renderWeightRecordList() {
-    const container = document.getElementById('weight-records-timeline-container');
-    if (!container) return; container.innerHTML = '';
-    const sortedDates = Object.keys(state.workouts).filter(date => state.workouts[date].weight > 0).sort((a, b) => new Date(b) - new Date(a));
-    if (sortedDates.length === 0) {
-        container.innerHTML = `<p class="text-xs text-slate-500 text-center py-10">기록된 건강 및 체중 지표가 존재하지 않습니다. 우측 상단의 버튼을 통해 당일 지표를 기록해 주십시오.</p>`;
-        updateKpiSnapshotCards(); return;
-    }
-    sortedDates.forEach((dateStr) => {
-        const data = state.workouts[dateStr]; const dayOfWeek = data.dayOfWeek || ''; const delta = data.weightDelta || 0;
-        const deltaText = delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1); const deltaClass = delta > 0 ? 'text-rose-500' : delta < 0 ? 'text-sky-500' : 'text-slate-400';
-        const isWarning = (data.specialNote && (data.specialNote.includes('외식') || data.specialNote.includes('음주') || data.specialNote.includes('치팅')));
-        const borderStyle = isWarning ? 'border-rose-500/40 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-slate-800/80';
-        const card = document.createElement('div'); card.className = `glass-panel border ${borderStyle} rounded-xl overflow-hidden transition-all duration-300`;
-        card.id = `accordion-card-${dateStr}`;
-        card.innerHTML = `
-            <div onclick="window.toggleAccordionCard('${dateStr}')" class="p-3.5 flex justify-between items-center cursor-pointer hover:bg-slate-900/40 transition-colors select-none">
+/**
+ * 하루치 기록 카드 HTML을 생성한다(수정/삭제 버튼 포함). 기존 타임라인과 신규 캘린더 상세 패널이
+ * 동일한 마크업을 공유하도록 렌더 로직을 이 함수 하나로 일원화했다.
+ * @param {string} dateStr
+ * @param {boolean} [startExpanded] - true면 접힘 없이 바로 펼친 상태로 렌더(캘린더 상세 패널용)
+ */
+export function buildRecordCardHTML(dateStr, startExpanded = false) {
+    const data = state.workouts[dateStr]; if (!data) return '';
+    const dayOfWeek = data.dayOfWeek || ''; const delta = data.weightDelta || 0;
+    const deltaText = delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1); const deltaClass = delta > 0 ? 'text-rose-500' : delta < 0 ? 'text-sky-500' : 'text-slate-400';
+    const isWarning = (data.specialNote && (data.specialNote.includes('외식') || data.specialNote.includes('음주') || data.specialNote.includes('치팅')));
+    const borderStyle = isWarning ? 'border-rose-500/40 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-slate-800/80';
+    const detailsHiddenClass = startExpanded ? '' : 'hidden';
+    const toggleAttr = startExpanded ? '' : `onclick="window.toggleAccordionCard('${dateStr}')"`;
+    return `
+        <div class="glass-panel border ${borderStyle} rounded-xl overflow-hidden transition-all duration-300" id="accordion-card-${dateStr}">
+            <div ${toggleAttr} class="p-3.5 flex justify-between items-center ${startExpanded ? '' : 'cursor-pointer hover:bg-slate-900/40'} transition-colors select-none">
                 <div class="flex items-center gap-2.5 min-w-0">
                     <div class="text-center shrink-0">
                         <span class="text-[10px] text-slate-500 font-bold block uppercase">${dayOfWeek}</span>
@@ -52,10 +55,10 @@ export function renderWeightRecordList() {
                 <div class="flex items-center gap-2 shrink-0">
                     <span class="px-1.5 py-0.5 text-[9px] font-black uppercase bg-slate-950 border border-slate-800 text-slate-400 rounded-md">${data.workoutPart || '휴식'}</span>
                     <span id="txt-scale-bowel-${dateStr}" class="text-xs font-bold text-sky-500">${data.bowel === 'O' ? '💩' : '🖨️'}</span>
-                    <span class="text-slate-500 font-bold text-xs transition-transform duration-300" id="arrow-${dateStr}">▼</span>
+                    ${startExpanded ? '' : `<span class="text-slate-500 font-bold text-xs transition-transform duration-300" id="arrow-${dateStr}">▼</span>`}
                 </div>
             </div>
-            <div id="details-${dateStr}" class="hidden border-t border-slate-800/60 bg-slate-950/40 p-3.5 space-y-3 text-[11px]">
+            <div id="details-${dateStr}" class="${detailsHiddenClass} border-t border-slate-800/60 bg-slate-950/40 p-3.5 space-y-3 text-[11px]">
                 <div class="grid grid-cols-2 gap-2 text-slate-300">
                     <div><span class="text-slate-500 font-medium">공복 눈바디:</span> <span class="font-black text-amber-400">${data.visualScore || '--'} 점</span></div>
                     <div><span class="text-slate-500 font-medium">공복 심박수:</span> <span class="font-black text-rose-400">${data.restingHR || '--'} bpm</span></div>
@@ -83,17 +86,110 @@ export function renderWeightRecordList() {
                     <button onclick="window.openRecordModal('${dateStr}')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-bold">수정</button>
                     <button onclick="window.deleteWeightRecordData('${dateStr}')" class="px-2.5 py-1 bg-slate-950 border border-slate-800 text-rose-400 hover:bg-rose-500/10 rounded font-bold">삭제</button>
                 </div>
-            </div>`;
-        container.appendChild(card);
-    });
+            </div>
+        </div>`;
+}
+
+export function renderWeightRecordList() {
+    const container = document.getElementById('weight-records-timeline-container');
+    if (!container) return; container.innerHTML = '';
+    const sortedDates = Object.keys(state.workouts).filter(date => state.workouts[date].weight > 0).sort((a, b) => new Date(b) - new Date(a));
+    if (sortedDates.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-500 text-center py-10">아직 기록이 없습니다. 위 버튼으로 오늘 기록을 추가해 보세요.</p>`;
+        updateKpiSnapshotCards(); updateMoreLessButtons(0, 0); return;
+    }
+    const visibleDates = sortedDates.slice(0, timelineLimit);
+    visibleDates.forEach((dateStr) => { container.insertAdjacentHTML('beforeend', buildRecordCardHTML(dateStr)); });
     updateKpiSnapshotCards();
+    updateMoreLessButtons(visibleDates.length, sortedDates.length);
+}
+
+function updateMoreLessButtons(shownCount, totalCount) {
+    const moreBtn = document.getElementById('btn-timeline-more');
+    const lessBtn = document.getElementById('btn-timeline-less');
+    if (moreBtn) moreBtn.classList.toggle('hidden', shownCount >= totalCount);
+    if (lessBtn) lessBtn.classList.toggle('hidden', timelineLimit <= 10);
+}
+
+export function showMoreTimeline() { timelineLimit += 10; renderWeightRecordList(); }
+export function closeMoreTimeline() { timelineLimit = 10; renderWeightRecordList(); }
+
+// ==========================================
+// [체중기록 캘린더 조회] 끝없는 타임라인 대신, 월 캘린더에서 날짜를 골라 그날의 기록만 바로 확인/수정/삭제.
+// ==========================================
+function ensureWeightCalendarInit() {
+    if (wrCalYear !== undefined) return;
+    const today = new Date();
+    wrCalYear = today.getFullYear(); wrCalMonth = today.getMonth();
+    wrCalSelectedDate = today.toISOString().slice(0, 10);
+}
+
+export function moveWeightCalendarMonth(direction) {
+    ensureWeightCalendarInit();
+    wrCalMonth += direction;
+    if (wrCalMonth < 0) { wrCalMonth = 11; wrCalYear -= 1; } else if (wrCalMonth > 11) { wrCalMonth = 0; wrCalYear += 1; }
+    renderWeightCalendar();
+}
+
+export function selectWeightCalendarDate(dateStr) {
+    ensureWeightCalendarInit();
+    wrCalSelectedDate = dateStr;
+    renderWeightCalendar();
+}
+
+function renderWeightCalendarDetail() {
+    const detailEl = document.getElementById('weight-calendar-detail');
+    if (!detailEl || !wrCalSelectedDate) return;
+    const hasRecord = state.workouts[wrCalSelectedDate] && state.workouts[wrCalSelectedDate].weight > 0;
+    if (hasRecord) {
+        detailEl.innerHTML = buildRecordCardHTML(wrCalSelectedDate, true);
+    } else {
+        const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+        const dow = days[new Date(wrCalSelectedDate).getDay()];
+        detailEl.innerHTML = `
+            <div class="glass-panel border border-slate-800/80 rounded-xl p-6 text-center space-y-3">
+                <p class="text-xs text-slate-500">${wrCalSelectedDate} (${dow}) 기록 없음</p>
+                <button onclick="window.openRecordModal('${wrCalSelectedDate}')" class="px-4 py-2 bg-sky-600/20 border border-sky-500/40 text-sky-400 text-xs font-bold rounded-xl transition-all active:scale-95">＋ 이 날짜 기록하기</button>
+            </div>`;
+    }
+}
+
+export function renderWeightCalendar() {
+    ensureWeightCalendarInit();
+    const gridEl = document.getElementById('weight-calendar-grid'); if (!gridEl) return; gridEl.innerHTML = '';
+    const labelEl = document.getElementById('weight-calendar-month-label');
+    if (labelEl) labelEl.textContent = `${wrCalYear}년 ${String(wrCalMonth + 1).padStart(2, '0')}월`;
+
+    const firstDay = new Date(wrCalYear, wrCalMonth, 1).getDay();
+    const lastDate = new Date(wrCalYear, wrCalMonth + 1, 0).getDate();
+    for (let i = 0; i < firstDay; i++) gridEl.appendChild(document.createElement('div'));
+
+    for (let day = 1; day <= lastDate; day++) {
+        const dateStr = `${wrCalYear}-${String(wrCalMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const hasRecord = state.workouts[dateStr] && state.workouts[dateStr].weight > 0;
+        const dayBtn = document.createElement('button');
+        dayBtn.textContent = day;
+        dayBtn.className = "p-2 rounded-lg font-bold text-xs transition-all flex flex-col items-center justify-center min-h-[38px] relative border border-transparent hover:border-slate-700 select-none";
+        if (hasRecord) { const dot = document.createElement('span'); dot.className = "w-1.5 h-1.5 bg-sky-500 rounded-full absolute bottom-1"; dayBtn.appendChild(dot); }
+        if (dateStr === wrCalSelectedDate) {
+            dayBtn.className += " wr-active-day font-black";
+        } else {
+            dayBtn.className += hasRecord ? " bg-slate-800/60 text-slate-200" : " bg-slate-900/40 text-slate-500";
+            const dow = new Date(wrCalYear, wrCalMonth, day).getDay();
+            if (dow === 0) dayBtn.className += " text-rose-400"; if (dow === 6) dayBtn.className += " text-sky-400";
+        }
+        dayBtn.onclick = () => selectWeightCalendarDate(dateStr);
+        gridEl.appendChild(dayBtn);
+    }
+
+    renderWeightCalendarDetail();
 }
 
 export function openRecordModal(editDateStr = '') {
     const modal = document.getElementById('weight-record-modal'); const dateInput = document.getElementById('record-date-input'); const titleLbl = document.getElementById('record-modal-title'); if (!modal) return;
     document.body.style.position = 'fixed'; document.body.style.width = '100%'; document.querySelectorAll('.chip-note-tag').forEach(c => c.classList.remove('matrix-chip-active'));
     if (editDateStr) {
-        titleLbl.innerText = `✏️ [${editDateStr}] 종합 건강 지표 정밀 수정`; dateInput.value = editDateStr; dateInput.readOnly = true; handleRecordDateChange(editDateStr);
+        titleLbl.innerText = `✏️ [${editDateStr}] 기록 수정`; dateInput.value = editDateStr; dateInput.readOnly = true; handleRecordDateChange(editDateStr);
         const data = state.workouts[editDateStr] || {};
         document.getElementById('record-weight-input').value = data.weight || ''; document.getElementById('record-visual-input').value = data.visualScore || '';
         document.getElementById('record-hr-input').value = data.restingHR || ''; document.getElementById('record-sleep-input').value = data.sleepTime || '';
@@ -105,7 +201,7 @@ export function openRecordModal(editDateStr = '') {
         document.getElementById('record-ratio-display').innerText = data.macroRatio || '0:0:0'; document.getElementById('record-special-input').value = data.specialNote || '';
         document.getElementById('record-memo-input').value = data.memo || ''; setBowelField(data.bowel || '');
     } else {
-        titleLbl.innerText = `＋ 당일 종합 신체 및 건강 지표 기입`; const todayStr = state.selectedDateStr || new Date().toISOString().slice(0, 10);
+        titleLbl.innerText = `＋ 오늘 기록`; const todayStr = state.selectedDateStr || new Date().toISOString().slice(0, 10);
         dateInput.value = todayStr; dateInput.readOnly = false; handleRecordDateChange(todayStr);
         document.getElementById('record-weight-input').value = ''; document.getElementById('record-visual-input').value = '';
         document.getElementById('record-hr-input').value = ''; document.getElementById('record-sleep-input').value = '';
@@ -157,16 +253,16 @@ export function saveWeightRecordData() {
     target.protein = parseFloat(document.getElementById('record-protein-input').value) || 0; target.fat = parseFloat(document.getElementById('record-fat-input').value) || 0;
     target.totalKcal = parseInt(document.getElementById('record-kcal-input').value) || 0; target.macroRatio = document.getElementById('record-ratio-display').innerText;
     target.specialNote = document.getElementById('record-special-input').value.trim(); target.memo = document.getElementById('record-memo-input').value.trim();
-    recalculateAllWeightDeltas(); saveToLocal(); closeRecordModal(); renderWeightRecordList(); setMatrixFilter(state.weightRecordFilter || 'all');
+    recalculateAllWeightDeltas(); saveToLocal(); closeRecordModal(); renderWeightRecordList(); renderWeightCalendar(); setMatrixFilter(state.weightRecordFilter || 'all');
     const activeToday = new Date().toISOString().slice(0,10); if (state.workouts[activeToday] && state.workouts[activeToday].weight > 0) { document.getElementById('prof-weight-display').innerText = state.workouts[activeToday].weight.toFixed(2) + 'kg'; }
-    showToast("종합 건강 지표 영속성 보존 완료.");
+    showToast("기록 저장 완료.");
 }
 
 export function deleteWeightRecordData(dateStr) {
-    if (confirm(`[${dateStr}] 일자의 건강 종합 지표를 소거할까요?\n(등록된 운동 일지는 완전히 보존됩니다.)`)) {
+    if (confirm(`[${dateStr}] 기록을 삭제할까요?\n(등록된 운동 일지는 그대로 보존됩니다.)`)) {
         const t = state.workouts[dateStr];
         if (t) { t.weight = 0; t.weightDelta = 0; t.visualScore = 0; t.restingHR = 0; t.sleepTime = 0; t.workoutPart = ''; t.anaerobic = 0; t.aerobic = 0; t.water = 0; t.bowel = 'X'; t.carbs = 0; t.protein = 0; t.fat = 0; t.totalKcal = 0; t.macroRatio = '0:0:0'; t.specialNote = ''; t.memo = ''; }
-        recalculateAllWeightDeltas(); saveToLocal(); renderWeightRecordList(); setMatrixFilter(state.weightRecordFilter || 'all'); showToast("당일 지표 기록을 초기화했습니다.");
+        recalculateAllWeightDeltas(); saveToLocal(); renderWeightRecordList(); renderWeightCalendar(); setMatrixFilter(state.weightRecordFilter || 'all'); showToast("기록을 삭제했습니다.");
     }
 }
 
@@ -199,40 +295,59 @@ export function setMatrixFilter(filterType) {
     updateWeightTrendChart();
 }
 
+const CHART_RANGE_COUNTS = { '7d': 7, '1m': 30, '6m': 182, 'all': Infinity };
+
+/**
+ * 추세 차트의 조회 기간(7일/1개월/6개월/전체)을 변경한다. 주식 차트의 기간 선택 버튼과 동일한 UX.
+ */
+export function setChartRange(range) {
+    state.weightRecordChartRange = range;
+    const btns = { '7d': 'chip-range-7d', '1m': 'chip-range-1m', '6m': 'chip-range-6m', 'all': 'chip-range-all' };
+    Object.entries(btns).forEach(([r, id]) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.className = r === range
+            ? "px-3 py-1.5 text-[11px] font-black rounded-lg bg-sky-500 text-white transition-all shadow-md"
+            : "px-3 py-1.5 text-[11px] font-bold rounded-lg bg-slate-900 border border-slate-800 text-slate-400 transition-all";
+    });
+    updateWeightTrendChart();
+}
+
 export function updateWeightTrendChart() {
     const canvas = document.getElementById('chart-weight-trend-mix'); if (!canvas) return; const ctx = canvas.getContext('2d');
     const chronologicalDates = Object.keys(state.workouts).filter(date => state.workouts[date].weight > 0).sort((a, b) => new Date(a) - new Date(b));
-    const recent7Days = chronologicalDates.slice(-7); const chartLabels = recent7Days.map(d => d.slice(5).replace('-', '/'));
-    if (mixChartInstance) { mixChartInstance.destroy(); mixChartInstance = null; } if (recent7Days.length === 0) return;
+    const rangeCount = CHART_RANGE_COUNTS[state.weightRecordChartRange || '7d'] || 7;
+    const rangeDates = Number.isFinite(rangeCount) ? chronologicalDates.slice(-rangeCount) : chronologicalDates;
+    const chartLabels = rangeDates.map(d => d.slice(5).replace('-', '/'));
+    if (mixChartInstance) { mixChartInstance.destroy(); mixChartInstance = null; } if (rangeDates.length === 0) return;
     const filterMode = state.weightRecordFilter || 'all'; let datasets = []; let optionsScales = { x: { grid: { display: false }, ticks: { color: '#94A3B8', font: { size: 10, weight: '600' } } } };
     if (filterMode === 'all') {
         datasets = [
-            { type: 'line', label: '공복체중(kg)', data: recent7Days.map(d => state.workouts[d].weight), borderColor: '#0EA5E9', backgroundColor: 'transparent', borderWidth: 3, pointBackgroundColor: '#0EA5E9', yAxisID: 'yLeft', tension: 0.25 },
-            { type: 'bar', label: '섭취열량(kcal)', data: recent7Days.map(d => state.workouts[d].totalKcal || 0), backgroundColor: 'rgba(30, 41, 59, 0.5)', borderColor: 'rgba(255, 255, 255, 0.1)', borderWidth: 1, borderRadius: 6, yAxisID: 'yRight' }
+            { type: 'line', label: '공복체중(kg)', data: rangeDates.map(d => state.workouts[d].weight), borderColor: '#0EA5E9', backgroundColor: 'transparent', borderWidth: 3, pointBackgroundColor: '#0EA5E9', yAxisID: 'yLeft', tension: 0.25 },
+            { type: 'bar', label: '섭취열량(kcal)', data: rangeDates.map(d => state.workouts[d].totalKcal || 0), backgroundColor: 'rgba(30, 41, 59, 0.5)', borderColor: 'rgba(255, 255, 255, 0.1)', borderWidth: 1, borderRadius: 6, yAxisID: 'yRight' }
         ];
         optionsScales.yLeft = { position: 'left', grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#0EA5E9', font: { size: 10 } } };
         optionsScales.yRight = { position: 'right', grid: { display: false }, ticks: { color: '#94A3B8', font: { size: 9 } } };
     } else if (filterMode === 'weight') {
         datasets = [
-            { type: 'line', label: '공복체중(kg)', data: recent7Days.map(d => state.workouts[d].weight), borderColor: '#0EA5E9', backgroundColor: 'transparent', borderWidth: 3, pointBackgroundColor: '#0EA5E9', yAxisID: 'yLeft', tension: 0.1 },
-            { type: 'bar', label: '체중변화(kg)', data: recent7Days.map(d => state.workouts[d].weightDelta || 0), backgroundColor: recent7Days.map(d => (state.workouts[d].weightDelta || 0) > 0 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(14, 165, 233, 0.4)'), borderColor: recent7Days.map(d => (state.workouts[d].weightDelta || 0) > 0 ? '#EF4444' : '#0EA5E9'), borderWidth: 1, borderRadius: 4, yAxisID: 'yDelta' }
+            { type: 'line', label: '공복체중(kg)', data: rangeDates.map(d => state.workouts[d].weight), borderColor: '#0EA5E9', backgroundColor: 'transparent', borderWidth: 3, pointBackgroundColor: '#0EA5E9', yAxisID: 'yLeft', tension: 0.1 },
+            { type: 'bar', label: '체중변화(kg)', data: rangeDates.map(d => state.workouts[d].weightDelta || 0), backgroundColor: rangeDates.map(d => (state.workouts[d].weightDelta || 0) > 0 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(14, 165, 233, 0.4)'), borderColor: rangeDates.map(d => (state.workouts[d].weightDelta || 0) > 0 ? '#EF4444' : '#0EA5E9'), borderWidth: 1, borderRadius: 4, yAxisID: 'yDelta' }
         ];
         optionsScales.yLeft = { position: 'left', grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#0EA5E9', font: { size: 10 } } };
         optionsScales.yDelta = { position: 'right', grid: { display: false }, ticks: { color: '#94A3B8', font: { size: 10 } } };
     } else if (filterMode === 'macros') {
         datasets = [
-            { type: 'bar', label: '총칼로리(kcal)', data: recent7Days.map(d => state.workouts[d].totalKcal || 0), backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981', borderWidth: 1.5, borderRadius: 6, yAxisID: 'yLeft' },
-            { type: 'line', label: '탄수화물(g)', data: recent7Days.map(d => state.workouts[d].carbs || 0), borderColor: '#F59E0B', borderWidth: 2, pointRadius: 2, backgroundColor: 'transparent', yAxisID: 'yRight', tension: 0.2 },
-            { type: 'line', label: '단백질(g)', data: recent7Days.map(d => state.workouts[d].protein || 0), borderColor: '#10B981', borderWidth: 2, pointRadius: 2, backgroundColor: 'transparent', yAxisID: 'yRight', tension: 0.2 },
-            { type: 'line', label: '지방(g)', data: recent7Days.map(d => state.workouts[d].fat || 0), borderColor: '#0EA5E9', borderWidth: 2, pointRadius: 2, backgroundColor: 'transparent', yAxisID: 'yRight', tension: 0.2 }
+            { type: 'bar', label: '총칼로리(kcal)', data: rangeDates.map(d => state.workouts[d].totalKcal || 0), backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981', borderWidth: 1.5, borderRadius: 6, yAxisID: 'yLeft' },
+            { type: 'line', label: '탄수화물(g)', data: rangeDates.map(d => state.workouts[d].carbs || 0), borderColor: '#F59E0B', borderWidth: 2, pointRadius: 2, backgroundColor: 'transparent', yAxisID: 'yRight', tension: 0.2 },
+            { type: 'line', label: '단백질(g)', data: rangeDates.map(d => state.workouts[d].protein || 0), borderColor: '#10B981', borderWidth: 2, pointRadius: 2, backgroundColor: 'transparent', yAxisID: 'yRight', tension: 0.2 },
+            { type: 'line', label: '지방(g)', data: rangeDates.map(d => state.workouts[d].fat || 0), borderColor: '#0EA5E9', borderWidth: 2, pointRadius: 2, backgroundColor: 'transparent', yAxisID: 'yRight', tension: 0.2 }
         ];
         optionsScales.yLeft = { position: 'left', grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#10B981', font: { size: 9 } } };
         optionsScales.yRight = { position: 'right', grid: { display: false }, ticks: { color: '#94A3B8', font: { size: 9 } } };
     } else if (filterMode === 'condition') {
         datasets = [
-            { type: 'line', label: '종합컨디션(점)', data: recent7Days.map(d => state.workouts[d].condition || 7), borderColor: '#0EA5E9', borderWidth: 2.5, pointRadius: 3, backgroundColor: 'transparent', yAxisID: 'yLeft', tension: 0.3 },
-            { type: 'line', label: '눈바디점수(점)', data: recent7Days.map(d => state.workouts[d].visualScore || 5), borderColor: '#A855F7', borderWidth: 2.5, pointRadius: 3, backgroundColor: 'transparent', yAxisID: 'yLeft', tension: 0.3 },
-            { type: 'line', label: '수면시간(h)', data: recent7Days.map(d => state.workouts[d].sleepTime || 0), borderColor: '#64748B', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 2, backgroundColor: 'transparent', yAxisID: 'yRight', tension: 0.1 }
+            { type: 'line', label: '종합컨디션(점)', data: rangeDates.map(d => state.workouts[d].condition || 7), borderColor: '#0EA5E9', borderWidth: 2.5, pointRadius: 3, backgroundColor: 'transparent', yAxisID: 'yLeft', tension: 0.3 },
+            { type: 'line', label: '눈바디점수(점)', data: rangeDates.map(d => state.workouts[d].visualScore || 5), borderColor: '#A855F7', borderWidth: 2.5, pointRadius: 3, backgroundColor: 'transparent', yAxisID: 'yLeft', tension: 0.3 },
+            { type: 'line', label: '수면시간(h)', data: rangeDates.map(d => state.workouts[d].sleepTime || 0), borderColor: '#64748B', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 2, backgroundColor: 'transparent', yAxisID: 'yRight', tension: 0.1 }
         ];
         optionsScales.yLeft = { position: 'left', min: 1, max: 10, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#0EA5E9', stepSize: 1, font: { size: 10 } } };
         optionsScales.yRight = { position: 'right', min: 0, max: 12, grid: { display: false }, ticks: { color: '#94A3B8', stepSize: 2, font: { size: 9 } } };
@@ -296,7 +411,7 @@ export function importWeightRecordsFromCSV(event) {
                 t.water = parseFloat(row[14]) || 0; t.anaerobic = parseInt(row[15]) || 0; t.aerobic = parseInt(row[16]) || 0; t.bowel = row[17] ? row[17].replace(/"/g, '') : "X";
                 t.specialNote = row[18] ? row[18].replace(/"/g, '') : ""; t.memo = row[19] ? row[19].replace(/"/g, '') : ""; count++;
             }
-            recalculateAllWeightDeltas(); saveToLocal(); renderWeightRecordList(); setMatrixFilter(state.weightRecordFilter || 'all'); showToast(`총 ${count}개 일자 지표 복원 완료.`);
+            recalculateAllWeightDeltas(); saveToLocal(); renderWeightRecordList(); renderWeightCalendar(); setMatrixFilter(state.weightRecordFilter || 'all'); showToast(`총 ${count}개 일자 지표 복원 완료.`);
         } catch (err) { alert(`복원 실패: ${err.message}`); } finally { if (loader) loader.classList.add('hidden'); event.target.value = ''; }
     };
     reader.readAsText(file, 'UTF-8');

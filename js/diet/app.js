@@ -12,7 +12,8 @@ import { showToast, applyMacroBarVisibility, closeMacroBar, showMacroBar, initMa
 import {
     renderPhaseTabs, adjAmt, loadPhase, toggleMealWorkout, openPhaseModal, closePhaseModal, savePhaseModal,
     deletePhase, copyPhase, pastePhase, openEditMealModal, closeEditMealModal, saveEditMealModal, cycleColor,
-    toggleCollapse, updateMealField, updateItemName, updateItemAmount, deleteItem, addItem, deleteMeal, calculateMacros
+    toggleCollapse, updateMealField, updateItemName, updateItemAmount, deleteItem, addItem, deleteMeal, calculateMacros,
+    moveMealOrder
 } from './dietPlanner.js';
 import { initCalcDropdowns, runSmartCalc } from './smartCalculator.js';
 import {
@@ -22,7 +23,9 @@ import {
 import {
     openRecordModal, closeRecordModal, handleRecordDateChange, setBowelField, toggleQuickNoteChip,
     pullDietaryMacrosFromPlanner, saveWeightRecordData, deleteWeightRecordData, toggleAccordionCard,
-    setMatrixFilter, updateWeightTrendChart, exportWeightRecordsToCSV, importWeightRecordsFromCSV, renderWeightRecordList
+    setMatrixFilter, updateWeightTrendChart, exportWeightRecordsToCSV, importWeightRecordsFromCSV, renderWeightRecordList,
+    setChartRange, renderWeightCalendar, moveWeightCalendarMonth, selectWeightCalendarDate,
+    showMoreTimeline, closeMoreTimeline
 } from './weightRecord.js';
 import {
     signInWithGoogle, signOut, uploadBackupToCloud, downloadBackupFromCloud, renderCloudAuthUI, onAuthStateChange
@@ -43,6 +46,7 @@ window.updateItemAmount = updateItemAmount;
 window.adjAmt = adjAmt;
 window.addItem = addItem;
 window.deleteItem = deleteItem;
+window.moveMealOrder = moveMealOrder;
 window.deleteMeal = deleteMeal;
 window.openPhaseModal = openPhaseModal;
 window.closePhaseModal = closePhaseModal;
@@ -79,6 +83,11 @@ window.setMatrixFilter = setMatrixFilter;
 window.updateWeightTrendChart = updateWeightTrendChart;
 window.exportWeightRecordsToCSV = exportWeightRecordsToCSV;
 window.importWeightRecordsFromCSV = importWeightRecordsFromCSV;
+window.setChartRange = setChartRange;
+window.moveWeightCalendarMonth = moveWeightCalendarMonth;
+window.selectWeightCalendarDate = selectWeightCalendarDate;
+window.showMoreTimeline = showMoreTimeline;
+window.closeMoreTimeline = closeMoreTimeline;
 
 // 하단 매크로 정보 바 닫기/하단고정 기능 전역 바인딩
 window.closeMacroBar = closeMacroBar;
@@ -113,6 +122,7 @@ export function switchMainTab(tabId) {
     if(tabId === 'tab-analysis') calculateMacros();
     if(tabId === 'tab-weight-record') {
         renderWeightRecordList();
+        renderWeightCalendar();
         setMatrixFilter(state.weightRecordFilter || 'all');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -138,6 +148,7 @@ function refreshView() {
 
     if (document.getElementById('tab-weight-record')?.classList.contains('block')) {
         renderWeightRecordList();
+        renderWeightCalendar();
         setMatrixFilter(state.weightRecordFilter || 'all');
     }
 

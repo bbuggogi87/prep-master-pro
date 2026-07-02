@@ -10,6 +10,11 @@ import { triggerSave, saveToLocal } from '../core/services.js';
 import { RECOMMENDED_ROUTINES } from './workoutConstants.js';
 import { showToast, toggleGlobalLoader, getWorkoutData } from './calendarCore.js';
 import { renderWorkoutList } from './workoutJournal.js';
+import { reorderArray, moveArrayItem } from '../core/reorderUtil.js';
+import { reorderButtonsHTML, dragHandleHTML, initSortableList } from '../core/reorderControls.js';
+
+let editorExerciseSortable = null;
+let editorSetSortables = [];
 
 export function openTemplateManager() { document.getElementById('template-modal').classList.remove('hidden'); document.getElementById('template-modal').classList.add('flex'); renderTemplateList(); }
 export function closeTemplateManager() { document.getElementById('template-modal').classList.add('hidden'); document.getElementById('template-modal').classList.remove('flex'); }
@@ -78,7 +83,7 @@ export function renderPresetRoutineGrid() {
     }
 
     const titleSecRec = document.createElement('div'); titleSecRec.className = "col-span-1 sm:col-span-2 border-b border-slate-800 pb-1 mt-4";
-    titleSecRec.innerHTML = `<h3 class="text-xs font-black text-amber-500 uppercase tracking-wider">🌟 보디빌딩 협업자 추천 분할 마스터 프로그램</h3>`;
+    titleSecRec.innerHTML = `<h3 class="text-xs font-black text-amber-500 uppercase tracking-wider">🌟 추천 루틴</h3>`;
     gridBox.appendChild(titleSecRec);
 
     RECOMMENDED_ROUTINES.forEach((prog, idx) => {
@@ -141,11 +146,13 @@ export function renderRoutinePopupEditorDOM() {
     const container = document.getElementById('routine-editor-list-container');
     if (!container || !state.routineEditorBuffer) return; container.innerHTML = '';
 
-    state.routineEditorBuffer.exercises.forEach((ex, exIdx) => {
+    const exercises = state.routineEditorBuffer.exercises;
+    exercises.forEach((ex, exIdx) => {
         let setsHtml = '';
         ex.sets.forEach((set, setIdx) => {
             setsHtml += `
             <div class="flex items-center justify-between gap-1 p-1.5 bg-slate-950 rounded-lg text-xs">
+                ${dragHandleHTML('editor-set-drag-handle')}
                 <span class="font-black text-amber-500 w-4 text-center">${setIdx + 1}</span>
                 <div class="flex items-center bg-slate-900 border border-slate-700 rounded p-0.5">
                     <input type="number" step="2.5" class="w-10 bg-transparent text-center font-bold text-white outline-none" value="${set.weight}" oninput="window.changeEditorSetField(${exIdx}, ${setIdx}, 'weight', this.value)">
@@ -156,10 +163,7 @@ export function renderRoutinePopupEditorDOM() {
                     <span class="text-[9px] text-slate-500 mr-1">회</span>
                 </div>
 
-                <div class="flex gap-0.5 shrink-0">
-                    <button onclick="window.moveSetOrderInEditor(${exIdx}, ${setIdx}, -1)" class="w-6 h-6 flex items-center justify-center bg-slate-800 active:bg-slate-700 rounded text-slate-400 font-bold text-[9px]">▲</button>
-                    <button onclick="window.moveSetOrderInEditor(${exIdx}, ${setIdx}, 1)" class="w-6 h-6 flex items-center justify-center bg-slate-800 active:bg-slate-700 rounded text-slate-400 font-bold text-[9px]">▼</button>
-                </div>
+                ${reorderButtonsHTML('moveSetOrderInEditor', setIdx, ex.sets.length, 'xs', [exIdx])}
 
                 <button onclick="window.deleteSetFromEditor(${exIdx}, ${setIdx})" class="text-rose-400 font-bold px-1">✕</button>
             </div>`;
@@ -169,23 +173,45 @@ export function renderRoutinePopupEditorDOM() {
         div.className = "p-3 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2";
         div.innerHTML = `
             <div class="flex justify-between items-center border-b border-slate-800 pb-1">
-                <div class="truncate"><span class="text-[9px] text-slate-500 block uppercase">${ex.part}</span><h4 class="text-xs font-black text-white truncate timeline-ex-title leading-tight">${ex.name}</h4></div>
-                <button onclick="window.deleteExerciseFromEditor(${exIdx})" class="text-[10px] text-rose-400 font-bold bg-slate-800 px-1.5 py-0.5 rounded">삭제</button>
+                <div class="flex items-center gap-1.5 min-w-0">
+                    ${dragHandleHTML('editor-exercise-drag-handle')}
+                    <div class="truncate"><span class="text-[9px] text-slate-500 block uppercase">${ex.part}</span><h4 class="text-xs font-black text-white truncate timeline-ex-title leading-tight">${ex.name}</h4></div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                    ${reorderButtonsHTML('moveExerciseOrderInEditor', exIdx, exercises.length, 'xs')}
+                    <button onclick="window.deleteExerciseFromEditor(${exIdx})" class="text-[10px] text-rose-400 font-bold bg-slate-800 px-1.5 py-0.5 rounded ml-1">삭제</button>
+                </div>
             </div>
-            <div class="space-y-1">${setsHtml}</div>
+            <div class="space-y-1" id="editor-sets-container-${exIdx}">${setsHtml}</div>
             <button onclick="window.addSetToEditor(${exIdx})" class="w-full py-1 border border-dashed border-slate-700 text-[10px] text-slate-400 font-bold rounded-lg bg-slate-950/40">+ 세트 추가</button>
         `;
         container.appendChild(div);
     });
+
+    // [재정렬 통일] 운동(바깥) + 각 운동의 세트(안쪽, 중첩) 드래그앤드롭을 매 렌더마다 재생성한다.
+    if (editorExerciseSortable) { editorExerciseSortable.destroy(); editorExerciseSortable = null; }
+    editorSetSortables.forEach(s => s && s.destroy()); editorSetSortables = [];
+
+    editorExerciseSortable = initSortableList(container, {
+        handle: '.editor-exercise-drag-handle',
+        onReorder: (oldIdx, newIdx) => { if (moveArrayItem(exercises, oldIdx, newIdx)) renderRoutinePopupEditorDOM(); },
+    });
+    exercises.forEach((ex, exIdx) => {
+        const setsContainer = document.getElementById(`editor-sets-container-${exIdx}`);
+        editorSetSortables.push(initSortableList(setsContainer, {
+            handle: '.editor-set-drag-handle',
+            onReorder: (oldIdx, newIdx) => { if (moveArrayItem(ex.sets, oldIdx, newIdx)) renderRoutinePopupEditorDOM(); },
+        }));
+    });
 }
 
-export function moveSetOrderInEditor(exIdx, setIdx, direction) {
+export function moveExerciseOrderInEditor(exIdx, action) {
+    if (reorderArray(state.routineEditorBuffer.exercises, exIdx, action)) renderRoutinePopupEditorDOM();
+}
+
+export function moveSetOrderInEditor(exIdx, setIdx, action) {
     const sets = state.routineEditorBuffer.exercises[exIdx].sets;
-    const targetIdx = setIdx + direction;
-    if (targetIdx >= 0 && targetIdx < sets.length) {
-        const temp = sets[setIdx]; sets[setIdx] = sets[targetIdx]; sets[targetIdx] = temp;
-        renderRoutinePopupEditorDOM();
-    }
+    if (reorderArray(sets, setIdx, action)) renderRoutinePopupEditorDOM();
 }
 
 export function addSetToEditor(exIdx) {

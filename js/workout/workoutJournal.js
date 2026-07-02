@@ -8,8 +8,12 @@ import { triggerSave } from '../core/services.js';
 import { WORKOUT_DB } from './workoutConstants.js';
 import { showToast, toggleGlobalLoader, getWorkoutData } from './calendarCore.js';
 import { startTimerLogic } from './restTimerEngine.js';
+import { reorderArray, moveArrayItem } from '../core/reorderUtil.js';
+import { reorderButtonsHTML, dragHandleHTML, initSortableList } from '../core/reorderControls.js';
 
 let undoBuffer = null;
+let exerciseSortable = null;
+let setSortables = [];
 
 export function renderWorkoutList() {
     const container = document.getElementById('workout-list-container');
@@ -34,7 +38,8 @@ export function renderWorkoutList() {
             setsHtml += `
             <div class="p-2 bg-slate-950/60 rounded-xl border border-slate-800/80 text-xs sm:text-sm space-y-1.5">
                 <div class="flex items-center justify-between gap-1.5">
-                    <div class="flex items-center gap-1.5 min-w-0">
+                    <div class="flex items-center gap-1 min-w-0">
+                        ${dragHandleHTML('set-drag-handle')}
                         <span class="font-black text-amber-500 w-4 text-center shrink-0">${setIdx + 1}</span>
                         <select onchange="window.changeSetField(${exIdx}, ${setIdx}, 'type', event.target.value)" class="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-slate-300 outline-none text-xs min-w-0">
                             <option value="일반" ${set.type==='일반'?'selected':''}>일반</option><option value="탑" ${set.type==='탑'?'selected':''}>탑</option>
@@ -42,10 +47,7 @@ export function renderWorkoutList() {
                         </select>
                     </div>
                     <div class="flex items-center gap-1.5 shrink-0">
-                        <div class="flex gap-0.5 shrink-0">
-                            <button onclick="window.moveSetOrder(${exIdx}, ${setIdx}, -1)" class="w-6 h-6 flex items-center justify-center bg-slate-800 active:bg-slate-700 rounded text-slate-300 font-bold text-[10px]">▲</button>
-                            <button onclick="window.moveSetOrder(${exIdx}, ${setIdx}, 1)" class="w-6 h-6 flex items-center justify-center bg-slate-800 active:bg-slate-700 rounded text-slate-300 font-bold text-[10px]">▼</button>
-                        </div>
+                        ${reorderButtonsHTML('moveSetOrder', setIdx, ex.sets.length, 'xs', [exIdx])}
                         <input type="checkbox" ${set.done?'checked':''} onchange="window.toggleSetComplete(${exIdx}, ${setIdx}, event.target.checked)" class="w-5 h-5 accent-amber-500 cursor-pointer shrink-0">
                         <button onclick="window.deleteSet(${exIdx}, ${setIdx})" class="text-slate-500 hover:text-rose-400 font-black text-xs px-1 shrink-0">✕</button>
                     </div>
@@ -71,8 +73,11 @@ export function renderWorkoutList() {
         card.className = "bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 space-y-3";
         card.innerHTML = `
             <div class="flex justify-between items-center border-b border-slate-800/60 pb-2">
-                <div class="flex-1">
-                    <span class="px-2 py-0.5 text-[10px] font-black uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md">${ex.part} · ${ex.type}</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5">
+                        ${dragHandleHTML('exercise-drag-handle', 'text-base')}
+                        <span class="px-2 py-0.5 text-[10px] font-black uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md">${ex.part} · ${ex.type}</span>
+                    </div>
                     <div class="flex flex-wrap items-center gap-2 mt-1.5 mb-1">
                         <h3 class="text-sm font-black text-white">${ex.name}</h3>
                         <span onclick="window.openRestTimerModal(${exIdx})" class="text-[10px] font-bold bg-slate-800 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-1 rounded-md cursor-pointer transition-colors active:scale-95">⏱️ 알람 (${currentRestTime}초)</span>
@@ -81,13 +86,12 @@ export function renderWorkoutList() {
                 </div>
 
                 <div class="flex gap-1 shrink-0 items-center mr-1">
-                    <button onclick="window.moveExerciseOrder(${exIdx}, -1)" class="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 active:bg-amber-500 text-slate-200 active:text-slate-950 rounded-lg font-black text-sm shadow">▲</button>
-                    <button onclick="window.moveExerciseOrder(${exIdx}, 1)" class="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 active:bg-amber-500 text-slate-200 active:text-slate-950 rounded-lg font-black text-sm shadow">▼</button>
+                    ${reorderButtonsHTML('moveExerciseOrder', exIdx, data.exercises.length)}
                 </div>
 
                 <button onclick="window.deleteExercise(${exIdx})" class="text-[11px] px-2.5 py-1.5 bg-slate-800 border border-slate-700 text-slate-400 hover:text-rose-400 rounded-md shrink-0">삭제</button>
             </div>
-            <div class="space-y-1.5">${setsHtml}</div>
+            <div class="space-y-1.5" id="sets-container-${exIdx}">${setsHtml}</div>
             <button onclick="window.addSet(${exIdx})" class="w-full py-1.5 border border-dashed border-slate-700 text-xs text-slate-400 hover:text-amber-400 font-bold rounded-xl bg-slate-950/20 transition-colors">+ 세트 추가</button>
         `;
         container.appendChild(card);
@@ -95,25 +99,38 @@ export function renderWorkoutList() {
 
     const totalVolumeEl = document.getElementById('label-total-volume');
     if(totalVolumeEl) totalVolumeEl.innerText = `총 훈련 볼륨: ${dailyTotalVolume.toLocaleString()} kg`;
+
+    // [재정렬 통일] 종목(바깥) + 각 종목의 세트(안쪽, 중첩) 드래그앤드롭을 매 렌더마다 재생성한다.
+    if (exerciseSortable) { exerciseSortable.destroy(); exerciseSortable = null; }
+    setSortables.forEach(s => s && s.destroy()); setSortables = [];
+
+    exerciseSortable = initSortableList(container, {
+        handle: '.exercise-drag-handle',
+        onReorder: (oldIdx, newIdx) => {
+            if (moveArrayItem(data.exercises, oldIdx, newIdx)) { triggerSave(showToast); renderWorkoutList(); }
+        },
+    });
+    data.exercises.forEach((ex, exIdx) => {
+        const setsContainer = document.getElementById(`sets-container-${exIdx}`);
+        setSortables.push(initSortableList(setsContainer, {
+            handle: '.set-drag-handle',
+            onReorder: (oldIdx, newIdx) => {
+                if (moveArrayItem(ex.sets, oldIdx, newIdx)) { triggerSave(showToast); renderWorkoutList(); }
+            },
+        }));
+    });
 }
 
-export function moveExerciseOrder(exIdx, direction) {
+export function moveExerciseOrder(exIdx, action) {
     const data = getWorkoutData();
-    const targetIdx = exIdx + direction;
-    if (targetIdx >= 0 && targetIdx < data.exercises.length) {
-        const temp = data.exercises[exIdx];
-        data.exercises[exIdx] = data.exercises[targetIdx];
-        data.exercises[targetIdx] = temp;
+    if (reorderArray(data.exercises, exIdx, action)) {
         triggerSave(showToast); renderWorkoutList(); showToast("운동 종목 배치 순서가 수정되었습니다.");
     }
 }
 
-export function moveSetOrder(exIdx, setIdx, direction) {
-    const data = getWorkoutData(); const sets = data.exercises[exIdx].sets; const targetIdx = setIdx + direction;
-    if (targetIdx >= 0 && targetIdx < sets.length) {
-        const temp = sets[setIdx]; sets[setIdx] = sets[targetIdx]; sets[targetIdx] = temp;
-        triggerSave(showToast); renderWorkoutList();
-    }
+export function moveSetOrder(exIdx, setIdx, action) {
+    const data = getWorkoutData(); const sets = data.exercises[exIdx].sets;
+    if (reorderArray(sets, setIdx, action)) { triggerSave(showToast); renderWorkoutList(); }
 }
 
 export function addSet(exIdx) {

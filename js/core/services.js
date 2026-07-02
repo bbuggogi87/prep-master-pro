@@ -15,6 +15,8 @@ let saveTimeout = null; //
  * 로컬 JSON 백업과 클라우드 백업(cloudSync.js)이 모두 이 함수를 공유해 payload 구조가 어긋나지 않도록 한다.
  */
 export function buildBackupPayload() {
+    let customRecommended = {};
+    try { customRecommended = JSON.parse(localStorage.getItem('prep_master_custom_recommended') || '{}'); } catch (e) { /* ignore */ }
     return {
         phases: state.phases,
         customSupps: state.customSupps,
@@ -22,6 +24,9 @@ export function buildBackupPayload() {
         workouts: state.workouts,
         templates: state.templates,
         smartCalc: state.smartCalc,
+        // [백업 누락 버그 수정] 분할루틴 탭에서 "추천 루틴"을 편집한 결과는 state가 아니라 이 localStorage 키에만
+        // 저장되어(routineTemplates.js) 기존엔 백업 대상에서 빠져 있었다 — 복원 시 커스텀 편집이 사라지는 버그.
+        customRecommended,
     };
 }
 
@@ -37,6 +42,9 @@ export function applyBackupPayload(data) {
     if (data.workouts) state.workouts = data.workouts;
     if (data.templates) state.templates = data.templates;
     if (data.smartCalc) state.smartCalc = data.smartCalc;
+    if (data.customRecommended) {
+        try { localStorage.setItem('prep_master_custom_recommended', JSON.stringify(data.customRecommended)); } catch (e) { /* ignore */ }
+    }
 }
 
 /**
