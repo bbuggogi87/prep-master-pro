@@ -2,11 +2,42 @@
  * 파일명: services.js
  * 역할: 브라우저 로컬 저장소 통제 및 사용자 지정 위치 파일 입출력(I/O: Input/Output) 인프라 관리
  * 변경사항: 페이지 이탈 시 동기식으로 로컬 스토리지를 즉시 강제 잠금 보존하는 내비게이션 인터셉터 함수 이식 완료
+ * [온라인 백업 추가] 로컬 JSON 백업과 신규 Supabase 온라인 백업(cloudSync.js)이 동일한 payload 구조를
+ * 공유하도록 buildBackupPayload()/applyBackupPayload() 공용 헬퍼로 일원화했다.
  */
 
 import { state, applyCustomSuppsToDB } from './store.js'; //
 
 let saveTimeout = null; //
+
+/**
+ * 현재 전역 상태에서 백업 payload(식단/체중/운동/루틴/스마트계산기 등 전체 상태)를 구성하는 단일 진실 공급원.
+ * 로컬 JSON 백업과 클라우드 백업(cloudSync.js)이 모두 이 함수를 공유해 payload 구조가 어긋나지 않도록 한다.
+ */
+export function buildBackupPayload() {
+    return {
+        phases: state.phases,
+        customSupps: state.customSupps,
+        userInfo: state.userInfo,
+        workouts: state.workouts,
+        templates: state.templates,
+        smartCalc: state.smartCalc,
+    };
+}
+
+/**
+ * 백업 payload(로컬 JSON 복원/클라우드 복원 공통)를 전역 state 에 반영한다. 호출 전 migrateData()로
+ * 구버전 포맷을 이미 정규화했다고 가정한다.
+ */
+export function applyBackupPayload(data) {
+    if (!data) return;
+    if (data.phases) state.phases = data.phases;
+    if (data.customSupps) state.customSupps = data.customSupps;
+    if (data.userInfo) state.userInfo = data.userInfo;
+    if (data.workouts) state.workouts = data.workouts;
+    if (data.templates) state.templates = data.templates;
+    if (data.smartCalc) state.smartCalc = data.smartCalc;
+}
 
 /**
  * [신규 추가] 현재 전역 상태를 사용자 지정 위치로 내보내는 JSON 백업 파일 생성 함수
@@ -17,15 +48,7 @@ let saveTimeout = null; //
  *  변환기/체중 기록을 포함한 전체 상태(state)를 빠짐없이 백업 payload 에 포함합니다.
  */
 export async function exportDataJSON(showToastCallback) {
-    const backupPayload = {
-        phases: state.phases, //
-        customSupps: state.customSupps, //
-        userInfo: state.userInfo, //
-        workouts: state.workouts, //
-        templates: state.templates, //
-        smartCalc: state.smartCalc //
-    };
-    const jsonStr = JSON.stringify(backupPayload, null, 2);
+    const jsonStr = JSON.stringify(buildBackupPayload(), null, 2);
     const pad = n => n < 10 ? '0' + n : n;
     const now = new Date();
     const fileName = `PrepMasterPro_Backup_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}.json`;
@@ -93,14 +116,7 @@ export function migrateData(data) {
  * 브라우저 내장 로컬 스토리지(Local Storage)에 현재 상태를 즉시 영구 기록하는 함수
  */
 export function saveToLocal() {
-    localStorage.setItem('prep_master_local_data', JSON.stringify({ //
-        phases: state.phases, //
-        customSupps: state.customSupps, //
-        userInfo: state.userInfo, //
-        workouts: state.workouts,   //
-        templates: state.templates,  //
-        smartCalc: state.smartCalc  //
-    }));
+    localStorage.setItem('prep_master_local_data', JSON.stringify(buildBackupPayload()));
 }
 
 /**
@@ -112,14 +128,9 @@ export function loadFromLocal() {
         try {
             let parsed = JSON.parse(local); //
             parsed = migrateData(parsed); //
-            if (parsed.phases) state.phases = parsed.phases; //
-            if (parsed.customSupps) state.customSupps = parsed.customSupps; //
-            if (parsed.userInfo) state.userInfo = parsed.userInfo; //
-            if (parsed.workouts) state.workouts = parsed.workouts;   //
-            if (parsed.templates) state.templates = parsed.templates; //
-            if (parsed.smartCalc) state.smartCalc = parsed.smartCalc; //
+            applyBackupPayload(parsed);
             return true; //
-        } catch(e) { 
+        } catch(e) {
             return false; //
         }
     }
@@ -180,18 +191,12 @@ export function importDataJSON(file, onSuccess, onError) {
         try {
             let data = JSON.parse(e.target.result); //
             data = migrateData(data); //
-            
-            if(data.phases) state.phases = data.phases; //
-            if(data.customSupps) state.customSupps = data.customSupps; //
-            if(data.userInfo) state.userInfo = data.userInfo; //
-            if(data.workouts) state.workouts = data.workouts;   //
-            if(data.templates) state.templates = data.templates; //
-            if(data.smartCalc) state.smartCalc = data.smartCalc; //
+            applyBackupPayload(data);
 
             applyCustomSuppsToDB(); //
             saveToLocal(); //
             if(onSuccess) onSuccess(); //
-        } catch(err) { 
+        } catch(err) {
             if(onError) onError(); //
         }
     };

@@ -4,7 +4,7 @@
  */
 
 import { state } from '../core/store.js';
-import { triggerSave, saveToLocal, importDataJSON } from '../core/services.js';
+import { triggerSave, saveToLocal, importDataJSON, buildBackupPayload } from '../core/services.js';
 import { showToast } from './calendarCore.js';
 import { startTimerLogic } from './restTimerEngine.js';
 
@@ -54,7 +54,7 @@ export function startGlobalAlarm() {
 }
 
 export async function triggerSettingExport() {
-    const dataStr = JSON.stringify({ phases: state.phases, customSupps: state.customSupps, userInfo: state.userInfo, workouts: state.workouts, templates: state.templates }, null, 2);
+    const dataStr = JSON.stringify(buildBackupPayload(), null, 2);
     const pad = n => n < 10 ? '0' + n : n; const now = new Date();
     const fileName = `TotalPrep_Backup_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.json`;
     try {

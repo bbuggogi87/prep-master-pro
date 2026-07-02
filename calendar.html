@@ -6,6 +6,7 @@
     <title>PREP MASTER PRO - Workout Record Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
         body { font-family: 'Pretendard', 'Inter', sans-serif; background-color: #090D16; color: #F8FAFC; -webkit-tap-highlight-color: transparent; }
@@ -286,6 +287,21 @@
                 <button onclick="document.getElementById('setting-import-file').click()" class="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-200 rounded-xl border border-slate-700">JSON 백업 복원</button>
             </div>
             <button onclick="window.triggerClearAllWorkoutData()" class="w-full py-3 bg-rose-950/20 text-rose-400 border border-rose-900/30 rounded-xl text-xs font-bold mt-4">⚠️ 전체 데이터 영구 초기화</button>
+        </div>
+
+        <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-4">
+            <h3 class="text-sm font-black text-emerald-500 uppercase tracking-wider border-b border-slate-800 pb-2">☁️ 온라인 백업 (Supabase)</h3>
+            <p class="text-[11px] text-slate-400 -mt-2">Google 계정으로 로그인하면 데이터를 온라인에도 백업하고, 다른 기기에서 복원할 수 있습니다. 로그인하지 않아도 로컬 백업만으로 기존과 동일하게 사용 가능합니다.</p>
+            <div class="flex items-center justify-between gap-2">
+                <span id="cloud-auth-status" class="text-xs font-bold text-slate-400">로딩 중...</span>
+                <button id="btn-cloud-login" onclick="window.cloudSignIn()" class="px-3 py-2 bg-white hover:bg-slate-200 text-slate-900 text-xs font-black rounded-lg shrink-0 transition-colors">G 로그인</button>
+                <button id="btn-cloud-logout" onclick="window.cloudSignOut()" class="hidden px-3 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 text-xs font-bold rounded-lg border border-slate-700 shrink-0 transition-colors">로그아웃</button>
+            </div>
+            <p id="cloud-last-sync" class="text-[11px] text-slate-500">마지막 동기화: 아직 없음</p>
+            <div id="cloud-backup-actions" class="grid grid-cols-2 gap-2 transition-opacity opacity-40 pointer-events-none">
+                <button onclick="window.cloudUpload()" class="px-3 py-3 text-xs font-bold bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-300 rounded-lg border border-emerald-700/50 transition-colors">📤 지금 온라인 백업</button>
+                <button onclick="window.cloudDownload()" class="px-3 py-3 text-xs font-bold bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 rounded-lg border border-amber-700/50 transition-colors">📥 온라인에서 복원</button>
+            </div>
         </div>
     </section>
 </div>

@@ -35,6 +35,9 @@ import {
     saveSystemSettings, loadSystemSettings, startGlobalAlarm, triggerSettingExport, triggerSettingImport,
     triggerClearAllWorkoutData, exportWorkoutToCSV
 } from './calendarSettings.js';
+import {
+    signInWithGoogle, signOut, uploadBackupToCloud, downloadBackupFromCloud, renderCloudAuthUI, onAuthStateChange
+} from '../core/cloudSync.js';
 
 // ==========================================
 // 브라우저 전역 윈도우 (window) 네임스페이스 바인딩
@@ -97,6 +100,16 @@ window.triggerLibraryAddFromEditor = triggerLibraryAddFromEditor;
 window.moveExerciseOrder = moveExerciseOrder;
 window.initCalendarModule = initCalendarModule;
 
+// Supabase 온라인 백업(Google 로그인/업로드/다운로드) 전역 바인딩
+window.cloudSignIn = () => signInWithGoogle().catch(e => showToast('로그인 실패: ' + (e.message || e)));
+window.cloudSignOut = () => signOut().then(() => { renderCloudAuthUI(); showToast('로그아웃 되었습니다.'); });
+window.cloudUpload = () => uploadBackupToCloud((msg) => { showToast(msg); renderCloudAuthUI(); });
+window.cloudDownload = () => downloadBackupFromCloud(
+    () => { refreshStateFromStorage(); renderCloudAuthUI(); showToast('☁️ 온라인 백업을 복원했습니다.'); },
+    (e) => showToast('복원 실패: ' + (e.message || e)),
+    showToast
+);
+
 /**
  * 루틴 편집기의 "종목 추가" 버튼 → 종목 사전 모달 오픈. exerciseLibrary.js 와 routineTemplates.js 사이의
  * 순환 의존을 피하기 위해 두 모듈 모두를 아는 오케스트레이터에 둡니다.
@@ -136,6 +149,7 @@ export function initCalendarModule() {
     loadSystemSettings();
     updateHomeDashboardWidgets();
     updateDdayBadge();
+    renderCloudAuthUI();
 }
 
 function initMetricsChangeEvents() {
@@ -171,6 +185,7 @@ function refreshStateFromStorage() {
     updateHomeDashboardWidgets();
     updateDdayBadge();
     loadSystemSettings();
+    renderCloudAuthUI();
 }
 
 window.addEventListener('beforeunload', () => { saveToLocal(); });
@@ -183,5 +198,9 @@ initializeFirebase((success) => {
     const statusEl = document.getElementById('cloud-status-workout');
     if (statusEl) { statusEl.innerHTML = '<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10B981]"></span> LOCAL TRAINER ACTIVE'; }
     initMetricsChangeEvents();
+
+    // Google 로그인/로그아웃 등 인증 상태 변화 시 설정 탭 배지를 자동 갱신(최초 부팅 시 1회만 등록).
+    try { onAuthStateChange(() => renderCloudAuthUI()); } catch (e) { console.error('클라우드 인증 리스너 등록 실패:', e); }
+
     initCalendarModule();
 });

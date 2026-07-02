@@ -24,6 +24,9 @@ import {
     pullDietaryMacrosFromPlanner, saveWeightRecordData, deleteWeightRecordData, toggleAccordionCard,
     setMatrixFilter, updateWeightTrendChart, exportWeightRecordsToCSV, importWeightRecordsFromCSV, renderWeightRecordList
 } from './weightRecord.js';
+import {
+    signInWithGoogle, signOut, uploadBackupToCloud, downloadBackupFromCloud, renderCloudAuthUI, onAuthStateChange
+} from '../core/cloudSync.js';
 
 // ==========================================
 // 브라우저 전역 윈도우 (window) 네임스페이스 명시적 바인딩
@@ -81,6 +84,16 @@ window.importWeightRecordsFromCSV = importWeightRecordsFromCSV;
 window.closeMacroBar = closeMacroBar;
 window.showMacroBar = showMacroBar;
 
+// Supabase 온라인 백업(Google 로그인/업로드/다운로드) 전역 바인딩
+window.cloudSignIn = () => signInWithGoogle().catch(e => showToast('로그인 실패: ' + (e.message || e)));
+window.cloudSignOut = () => signOut().then(() => { renderCloudAuthUI(); showToast('로그아웃 되었습니다.'); });
+window.cloudUpload = () => uploadBackupToCloud((msg) => { showToast(msg); renderCloudAuthUI(); });
+window.cloudDownload = () => downloadBackupFromCloud(
+    () => { refreshView(); renderCloudAuthUI(); showToast('☁️ 온라인 백업을 복원했습니다.'); },
+    (e) => showToast('복원 실패: ' + (e.message || e)),
+    showToast
+);
+
 export function switchMainTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => {
         el.classList.add('hidden'); el.classList.remove('block');
@@ -127,6 +140,8 @@ function refreshView() {
         renderWeightRecordList();
         setMatrixFilter(state.weightRecordFilter || 'all');
     }
+
+    renderCloudAuthUI();
 }
 
 function refreshFromStorage() { loadFromLocal(); refreshView(); }
@@ -153,6 +168,9 @@ initializeFirebase((success) => {
     initScrollChromeGuards();
     initMacroBarState();
     setInterval(() => { saveToLocal(); }, 60000);
+
+    // Google 로그인/로그아웃 등 인증 상태 변화 시 설정 탭 배지를 자동 갱신(최초 부팅 시 1회만 등록).
+    try { onAuthStateChange(() => renderCloudAuthUI()); } catch (e) { console.error('클라우드 인증 리스너 등록 실패:', e); }
 
     refreshView();
 });
