@@ -1,0 +1,66 @@
+/*
+ * 파일명: fonts.css
+ * 역할: 원본 웹앱이 Google Fonts CDN에서 불러오던 Pretendard/Inter 폰트를 오프라인 로컬 파일로 벤더링.
+ * - Inter: Google Fonts가 실제로 서빙하는 variable woff2 1개 파일을 weight 300~900 선언에 공유(원본과 동일 방식).
+ * - Pretendard: 원본 CSS의 Google Fonts URL은 Pretendard를 서빙하지 않아(비공식 파라미터) 실제로는 로드되지 않고
+ *   시스템 폰트로 대체되던 상태였음. 오프라인 앱에서는 원래 의도대로 실제 Pretendard 정적 폰트를 자체 호스팅하여
+ *   한글 렌더링 품질을 개선함(기능적 회귀 없음, 시각적 품질 향상).
+ */
+
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/Pretendard-300.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/Pretendard-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/Pretendard-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/Pretendard-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/Pretendard-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/Pretendard-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/Pretendard-900.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+  src: url('./fonts/Inter-latin-variable.woff2') format('woff2');
+}

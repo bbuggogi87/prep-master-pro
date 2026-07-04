@@ -1,0 +1,42 @@
+<svg viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg">
+  <rect x="8" y="8" width="184" height="244" rx="22" fill="#5B6178"/>
+  <rect x="28" y="26" width="144" height="52" rx="10" fill="#BEDE8C"/>
+  <g fill="#33374A">
+    <rect x="28" y="94" width="34" height="34" rx="9"/>
+    <rect x="72" y="94" width="34" height="34" rx="9"/>
+    <rect x="116" y="94" width="34" height="34" rx="9"/>
+    <rect x="28" y="136" width="34" height="34" rx="9"/>
+    <rect x="72" y="136" width="34" height="34" rx="9"/>
+    <rect x="116" y="136" width="34" height="34" rx="9"/>
+    <rect x="28" y="178" width="34" height="34" rx="9"/>
+    <rect x="72" y="178" width="34" height="34" rx="9"/>
+    <rect x="116" y="178" width="34" height="34" rx="9"/>
+    <rect x="28" y="220" width="34" height="34" rx="9"/>
+  </g>
+  <g fill="#B7BAC2">
+    <rect x="160" y="94" width="34" height="34" rx="9"/>
+    <rect x="160" y="136" width="34" height="34" rx="9"/>
+    <rect x="160" y="178" width="34" height="34" rx="9"/>
+    <rect x="72" y="220" width="34" height="34" rx="9"/>
+    <rect x="116" y="220" width="34" height="34" rx="9"/>
+    <rect x="160" y="220" width="34" height="34" rx="9"/>
+  </g>
+  <g fill="#FFFFFF" font-family="Arial, sans-serif" font-weight="700" text-anchor="middle">
+    <text x="45" y="118" font-size="20">7</text>
+    <text x="89" y="118" font-size="20">8</text>
+    <text x="133" y="118" font-size="20">9</text>
+    <text x="45" y="160" font-size="20">4</text>
+    <text x="89" y="160" font-size="20">5</text>
+    <text x="133" y="160" font-size="20">6</text>
+    <text x="45" y="202" font-size="20">3</text>
+    <text x="89" y="202" font-size="20">2</text>
+    <text x="133" y="202" font-size="20">1</text>
+    <text x="45" y="244" font-size="20">0</text>
+    <text x="177" y="117" font-size="18">÷</text>
+    <text x="177" y="159" font-size="18">×</text>
+    <text x="177" y="201" font-size="22">−</text>
+    <text x="177" y="242" font-size="22">+</text>
+    <text x="89" y="243" font-size="24">·</text>
+    <text x="133" y="240" font-size="16">=</text>
+  </g>
+</svg>

@@ -4,15 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <title>PREP MASTER PRO - Workout Record Hub</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="vendor/tailwind.js"></script>
+    <script src="vendor/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="vendor/sortable.min.js"></script>
+    <script src="vendor/exceljs.min.js"></script>
+    <link rel="stylesheet" href="vendor/fonts.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
         body { font-family: 'Pretendard', 'Inter', sans-serif; background-color: #090D16; color: #F8FAFC; -webkit-tap-highlight-color: transparent; }
         .glass-panel { background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4); }
         .active-tab-bar { border-bottom: 3px solid #F59E0B; color: #F59E0B; font-weight: 900; background-color: rgba(245, 158, 11, 0.1); }
+        /* [데스크탑 사이드바] 좌측 고정 내비게이션 — 모바일 하단탭바 대신 항상 노출되는 세로 메뉴 */
+        .sidebar-nav-btn { display: flex; align-items: center; gap: 0.65rem; padding: 0.85rem 1rem; border-radius: 0.75rem; color: #94A3B8; font-weight: 700; font-size: 0.875rem; text-align: left; transition: all 0.15s ease; border-left: 3px solid transparent; }
+        .sidebar-nav-btn:hover { background: rgba(30, 41, 59, 0.6); color: #FFFFFF; }
+        .sidebar-nav-active { background: rgba(245, 158, 11, 0.12); color: #F59E0B !important; border-left-color: #F59E0B; }
         .active-day { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: #090D16; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; }
         input[type="number"] { -moz-appearance: textfield !important; }
@@ -26,14 +31,14 @@
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     </style>
 </head>
-<body class="antialiased min-h-screen custom-scrollbar relative pb-32">
+<body class="antialiased min-h-screen custom-scrollbar relative">
 
 <div id="global-loading-layer" class="fixed inset-0 bg-black/80 z-[300] hidden flex-col items-center justify-center gap-4 select-none pointer-events-auto animate-fade-in">
     <div class="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
     <p id="global-loading-text" class="text-sm font-black text-amber-400 tracking-wider">인프라 분석 동기화 중...</p>
 </div>
 
-<div id="toast" class="fixed bottom-32 right-5 z-[250] transform translate-y-10 opacity-0 transition-all duration-300 pointer-events-none shadow-2xl">
+<div id="toast" class="fixed bottom-5 right-5 z-[250] transform translate-y-10 opacity-0 transition-all duration-300 pointer-events-none shadow-2xl">
     <div class="glass-panel px-5 py-4 rounded-2xl flex items-center gap-3 border-amber-500/50 bg-[#0F172A]">
         <span class="w-3 h-3 bg-amber-500 rounded-full animate-ping flex-shrink-0"></span>
         <p class="text-sm font-bold text-white break-keep" id="toast-text">시스템 안전 보호 확인</p>
@@ -41,8 +46,8 @@
     </div>
 </div>
 
-<div id="timer-floating-bar" class="fixed bottom-0 left-0 w-full z-[70] transform translate-y-full opacity-0 transition-all duration-500 pointer-events-none">
-    <div class="mx-auto max-w-7xl bg-[#090D16]/95 backdrop-blur-xl border-t-2 border-amber-500/80 shadow-[0_-10px_40px_rgba(245,158,11,0.15)] rounded-t-3xl px-4 py-5">
+<div id="timer-floating-bar" class="fixed bottom-0 left-60 right-0 z-[70] transform translate-y-full opacity-0 transition-all duration-500 pointer-events-none">
+    <div class="mx-auto max-w-4xl bg-[#090D16]/95 backdrop-blur-xl border-t-2 border-amber-500/80 shadow-[0_-10px_40px_rgba(245,158,11,0.15)] rounded-t-3xl px-4 py-5">
         <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-3">
                 <span id="timer-pulse-dot" class="w-3 h-3 bg-rose-500 rounded-full animate-pulse"></span>
@@ -64,26 +69,23 @@
     </div>
 </div>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4">
-    <header>
-        <h1 class="text-2xl sm:text-4xl font-black text-white text-center sm:text-left">TRAINING <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-rose-400">TRACKER</span></h1>
-    </header>
-</div>
+<div class="flex min-h-screen">
+    <aside class="w-60 shrink-0 fixed top-0 left-0 h-screen bg-[#0B0F1A] border-r border-slate-800/80 z-40 py-6 px-4 flex flex-col overflow-y-auto custom-scrollbar">
+        <h1 class="text-lg font-black text-white px-2 mb-8">TRAINING <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-rose-400">TRACKER</span></h1>
+        <nav class="flex-1 flex flex-col gap-1">
+            <button onclick="window.switchCalendarTab('tab-home')" id="nav-tab-home" class="sidebar-nav-btn sidebar-nav-active">🏠 홈 대시보드</button>
+            <button onclick="window.switchCalendarTab('tab-record')" id="nav-tab-record" class="sidebar-nav-btn">📝 기록지</button>
+            <button onclick="window.switchCalendarTab('tab-routine')" id="nav-tab-routine" class="sidebar-nav-btn">📋 분할루틴</button>
+            <button onclick="window.switchCalendarTab('tab-alarm')" id="nav-tab-alarm" class="sidebar-nav-btn">⏰ 수동알람</button>
+            <button onclick="window.switchCalendarTab('tab-stats')" id="nav-tab-stats" class="sidebar-nav-btn">🧬 입체분석</button>
+            <button onclick="window.switchCalendarTab('tab-settings')" id="nav-tab-settings" class="sidebar-nav-btn">⚙️ 환경설정</button>
+        </nav>
+        <a href="index.html" onclick="window.handleNavigationWithSave('index.html'); return false;" class="sidebar-nav-btn text-sky-400 hover:bg-sky-900/20 hover:text-sky-300 mt-4 border-t border-slate-800/80 pt-4">🍱 식단기록으로 이동</a>
+    </aside>
 
-<nav class="sticky top-0 left-0 w-full z-50 bg-[#090D16]/95 backdrop-blur-md border-y border-slate-800/80 shadow-lg">
-    <div class="max-w-7xl mx-auto flex overflow-x-auto no-scrollbar whitespace-nowrap text-sm font-bold text-slate-400">
-        <button onclick="window.switchCalendarTab('tab-home')" id="nav-tab-home" class="flex-1 py-4 px-5 text-center transition-all min-w-[75px] active-tab-bar">홈 대시보드</button>
-        <button onclick="window.switchCalendarTab('tab-record')" id="nav-tab-record" class="flex-1 py-4 px-5 text-center transition-all min-w-[75px]">기록지</button>
-        <button onclick="window.switchCalendarTab('tab-routine')" id="nav-tab-routine" class="flex-1 py-4 px-5 text-center transition-all min-w-[75px]">분할루틴</button>
-        <button onclick="window.switchCalendarTab('tab-alarm')" id="nav-tab-alarm" class="flex-1 py-4 px-5 text-center transition-all min-w-[75px]">수동알람</button>
-        <button onclick="window.switchCalendarTab('tab-stats')" id="nav-tab-stats" class="flex-1 py-4 px-5 text-center transition-all min-w-[75px]">입체분석</button>
-        <button onclick="window.switchCalendarTab('tab-settings')" id="nav-tab-settings" class="flex-1 py-4 px-5 text-center transition-all min-w-[75px]">환경설정</button>
-        <a href="index.html" onclick="window.handleNavigationWithSave('index.html'); return false;" class="flex-1 py-4 px-5 text-center transition-all min-w-[75px] text-sky-400 hover:bg-sky-900/20">🍱 식단기록</a>
-    </div>
-</nav>
+    <main class="flex-1 min-w-0 ml-60">
+    <div class="max-w-6xl mx-auto px-6 lg:px-10 pt-8">
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-    
     <section id="pane-tab-home" class="calendar-pane space-y-4 animate-fade-in block">
         <div class="flex flex-wrap items-center gap-2">
             <span id="badge-dday" class="px-3 py-1 text-[11px] font-bold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full">D-Day 체크</span>
@@ -157,9 +159,16 @@
                         ＋ 종목 사전 선택
                     </button>
                 </div>
-                
+
+                <div class="flex items-center justify-between mb-2 px-1">
+                    <label class="flex items-center gap-2 text-[11px] font-bold text-slate-400 cursor-pointer select-none">
+                        <input type="checkbox" id="chk-select-all-sets" onchange="window.toggleAllSetsComplete(event.target.checked)" class="w-4 h-4 accent-amber-500 cursor-pointer">
+                        전체 선택(완료 표시)
+                    </label>
+                </div>
+
                 <div id="workout-list-container" class="space-y-4 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar"></div>
-                
+
                 <button onclick="window.clearDailyExercises()" class="w-full mt-4 py-3 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 text-xs font-black rounded-xl transition-colors shadow-inner flex items-center justify-center gap-1.5">
                     ⚠️ 당일 운동 정보 모두 제거 (신체 계측치 제외)
                 </button>
@@ -173,6 +182,16 @@
                         <span class="text-lg group-hover:scale-110 transition-transform">📂</span>
                         <span class="text-xs font-bold text-slate-300">내 루틴 가져오기</span>
                     </button>
+                </div>
+
+                <div class="mt-3 grid grid-cols-2 gap-3">
+                    <button onclick="window.exportRecordSheetToExcel()" class="py-3 bg-slate-800/50 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold rounded-xl transition-all shadow-md active:scale-95 text-center">
+                        📤 기록지 엑셀로 내보내기
+                    </button>
+                    <button onclick="document.getElementById('hidden-workout-excel-file-input').click()" class="py-3 bg-slate-800/50 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold rounded-xl transition-all shadow-md active:scale-95 text-center">
+                        📥 기록지 엑셀 불러오기
+                    </button>
+                    <input type="file" id="hidden-workout-excel-file-input" class="hidden" accept=".xlsx" onchange="window.importRecordSheetFromExcel(event)">
                 </div>
             </div>
         </div>
@@ -253,6 +272,19 @@
                 <h4 class="text-sm font-black text-sky-400 truncate" id="stat-best-1rm">집계 중</h4>
             </div>
         </div>
+
+        <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-sm font-bold text-slate-200">💪 부위별 주간 세트 수 가이드</h3>
+                <div class="flex gap-1.5">
+                    <button id="chip-vol-thisWeek" onclick="window.setVolumeRangeMode('thisWeek')" class="flex-1 py-2.5 text-xs font-black rounded-lg bg-amber-500 text-slate-950 transition-all">이번 주</button>
+                    <button id="chip-vol-lastWeek" onclick="window.setVolumeRangeMode('lastWeek')" class="flex-1 py-2.5 text-xs font-bold rounded-lg bg-slate-900 border border-slate-800 text-slate-400 transition-all">지난 주</button>
+                    <button id="chip-vol-average" onclick="window.setVolumeRangeMode('average')" class="flex-1 py-2.5 text-xs font-bold rounded-lg bg-slate-900 border border-slate-800 text-slate-400 transition-all">평균(4주)</button>
+                </div>
+            </div>
+            <div id="muscle-volume-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+        </div>
+
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="glass-panel p-5 rounded-2xl border border-slate-800">
                 <h3 class="text-sm font-bold text-slate-200 mb-4">🎯 부위별 세트 균형 레이더</h3>
@@ -332,11 +364,76 @@
             </div>
         </div>
     </section>
+    </div>
+    </main>
 </div>
 
-<button onclick="window.triggerQuickInputFAB()" class="fixed bottom-8 right-6 z-[90] w-14 h-14 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center border-2 border-[#090D16] active:scale-95 transition-transform">
+<button onclick="window.openQuickSettingsPanel()" id="quick-settings-fab" title="빠른 설정" class="fixed bottom-8 right-8 z-[90] w-14 h-14 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center border-2 border-[#090D16] shadow-xl hover:scale-105 active:scale-95 transition-transform">
     <span class="text-slate-950 font-black text-2xl select-none">＋</span>
 </button>
+
+<div id="quick-settings-modal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/85 backdrop-blur-sm px-4">
+    <div class="glass-panel p-5 sm:p-6 rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto custom-scrollbar animate-fade-in border border-amber-500/30 shadow-2xl">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-base font-black text-white">⚡ 빠른 설정</h3>
+            <button onclick="window.closeQuickSettingsPanel()" class="text-slate-400 hover:text-white font-black text-sm px-2 py-1">✕</button>
+        </div>
+
+        <div class="space-y-2">
+            <div class="border border-slate-800 rounded-xl overflow-hidden">
+                <button onclick="window.toggleQuickAccordion('qs-panel-set')" class="w-full flex justify-between items-center px-4 py-3 bg-slate-900/60 text-sm font-bold text-white">
+                    <span>⚡ 빠른 세트 입력</span>
+                    <span id="qs-arrow-qs-panel-set" class="text-slate-400 transition-transform inline-block">▼</span>
+                </button>
+                <div id="qs-panel-set" class="hidden p-4 space-y-3 bg-slate-950/40">
+                    <div class="flex gap-2">
+                        <select id="quick-select-ex-name" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none"></select>
+                        <button onclick="window.openLibraryForQuickInput()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-bold shrink-0">📚 사전</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-[11px] font-bold text-slate-400 mb-1">중량 (kg)</label><input type="number" step="2.5" id="quick-input-weight" value="60" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-center text-base font-black text-amber-400 outline-none"></div>
+                        <div><label class="block text-[11px] font-bold text-slate-400 mb-1">반복 횟수 (Reps)</label><input type="number" id="quick-input-reps" value="10" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-center text-base font-black text-white outline-none"></div>
+                    </div>
+                    <button onclick="window.saveQuickInputFABModal()" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl">등록</button>
+                </div>
+            </div>
+
+            <div class="border border-slate-800 rounded-xl overflow-hidden">
+                <button onclick="window.toggleQuickAccordion('qs-panel-alarm')" class="w-full flex justify-between items-center px-4 py-3 bg-slate-900/60 text-sm font-bold text-white">
+                    <span>⏰ 수동 알람</span>
+                    <span id="qs-arrow-qs-panel-alarm" class="text-slate-400 transition-transform inline-block">▼</span>
+                </button>
+                <div id="qs-panel-alarm" class="hidden p-4 space-y-3 bg-slate-950/40">
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="window.setQuickAlarmSec(30)" class="py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg border border-slate-700">30초</button>
+                        <button onclick="window.setQuickAlarmSec(60)" class="py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg border border-slate-700">60초</button>
+                        <button onclick="window.setQuickAlarmSec(90)" class="py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg border border-slate-700">90초</button>
+                        <button onclick="window.setQuickAlarmSec(120)" class="py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg border border-slate-700">120초</button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="quick-alarm-sec" value="60" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 text-center text-lg font-black text-white outline-none">
+                        <span class="text-slate-500 font-bold shrink-0">초</span>
+                    </div>
+                    <label class="flex items-center justify-between gap-2 bg-slate-900 border border-slate-700 rounded-xl p-3 cursor-pointer select-none">
+                        <span class="text-xs font-bold text-slate-400">진동 알림</span>
+                        <input type="checkbox" id="quick-alarm-vibration" checked class="w-5 h-5 accent-amber-500 cursor-pointer">
+                    </label>
+                    <button onclick="window.startQuickAlarm()" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl">타이머 즉시 가동</button>
+                </div>
+            </div>
+
+            <div class="border border-slate-800 rounded-xl overflow-hidden">
+                <button onclick="window.toggleQuickAccordion('qs-panel-record')" class="w-full flex justify-between items-center px-4 py-3 bg-slate-900/60 text-sm font-bold text-white">
+                    <span>⚖️ 오늘자 체중기록</span>
+                    <span id="qs-arrow-qs-panel-record" class="text-slate-400 transition-transform inline-block">▼</span>
+                </button>
+                <div id="qs-panel-record" class="hidden p-4 bg-slate-950/40">
+                    <button onclick="window.closeQuickSettingsPanel(); window.openTodayWeightQuickRecord();" class="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white text-xs font-black rounded-xl">⚖️ 오늘자 체중기록 열기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div id="library-modal" class="fixed inset-0 z-[160] hidden items-center justify-center bg-black/85 backdrop-blur-sm px-4">
     <div class="glass-panel p-5 sm:p-6 rounded-3xl w-full max-w-lg h-[85vh] max-h-[85vh] flex flex-col border border-sky-500/30 shadow-2xl overflow-hidden animate-fade-in">
@@ -398,27 +495,22 @@
     <div class="glass-panel p-6 rounded-3xl w-full max-w-sm animate-fade-in border border-amber-500/30 shadow-2xl">
         <h3 class="text-base font-black text-white mb-2">📥 현재 일지를 루틴 프리셋으로 저장</h3>
         <p class="text-xs text-slate-400 mb-4">오늘 기록지에 세팅된 운동 순서를 저장합니다.</p>
-        <input type="text" id="save-routine-name-input" placeholder="예: 가슴/어깨 루틴 프리셋" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none mb-5 focus:border-amber-500">
+
+        <div class="grid grid-cols-2 gap-2 mb-4">
+            <button id="save-routine-mode-new" onclick="window.setSaveRoutineMode('new')" class="py-2.5 text-xs font-black rounded-lg bg-amber-500 text-slate-950 transition-all">새로 저장</button>
+            <button id="save-routine-mode-overwrite" onclick="window.setSaveRoutineMode('overwrite')" class="py-2.5 text-xs font-bold rounded-lg bg-slate-900 border border-slate-800 text-slate-400 transition-all">기존에 덮어쓰기</button>
+        </div>
+
+        <div id="save-routine-new-fields">
+            <input type="text" id="save-routine-name-input" placeholder="예: 가슴/어깨 루틴 프리셋" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none mb-5 focus:border-amber-500">
+        </div>
+        <div id="save-routine-overwrite-fields" class="hidden">
+            <select id="save-routine-overwrite-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none mb-5"></select>
+        </div>
+
         <div class="flex gap-2">
             <button onclick="window.closeSaveRoutineModal()" class="flex-1 py-3 bg-slate-950 text-slate-400 text-xs font-bold rounded-xl border border-slate-800">취소</button>
             <button onclick="window.confirmSaveRoutine()" class="flex-1 py-3 bg-amber-500 text-slate-950 text-xs font-black rounded-xl">저장하기</button>
-        </div>
-    </div>
-</div>
-
-<div id="quick-input-modal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/85 backdrop-blur-sm px-4">
-    <div class="glass-panel p-5 sm:p-6 rounded-3xl w-full max-w-md animate-fade-in border border-amber-500/30 shadow-2xl">
-        <h3 class="text-base font-black text-white mb-4">⚡ 빠른 세트 입력</h3>
-        <div class="space-y-3">
-            <div><label class="block text-[11px] font-bold text-slate-400 mb-1">종목 선택</label><select id="quick-select-ex-name" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white font-bold outline-none"></select></div>
-            <div class="grid grid-cols-2 gap-2">
-                <div><label class="block text-[11px] font-bold text-slate-400 mb-1">중량 (kg)</label><input type="number" step="2.5" id="quick-input-weight" value="60" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-center text-base font-black text-amber-400 outline-none"></div>
-                <div><label class="block text-[11px] font-bold text-slate-400 mb-1">반복 횟수 (Reps)</label><input type="number" id="quick-input-reps" value="10" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-center text-base font-black text-white outline-none"></div>
-            </div>
-        </div>
-        <div class="flex gap-2 mt-5">
-            <button onclick="window.closeQuickInputFABModal()" class="flex-1 py-3 bg-slate-950 text-slate-400 text-xs font-bold rounded-xl border border-slate-800">취소</button>
-            <button onclick="window.saveQuickInputFABModal()" class="flex-1 py-3 bg-amber-500 text-slate-950 text-xs font-black rounded-xl">등록</button>
         </div>
     </div>
 </div>
@@ -430,7 +522,8 @@
             <button onclick="window.closeTemplatePopupEditor()" class="text-slate-400 hover:text-white font-black text-sm px-2 py-1">✕</button>
         </div>
         <p class="text-[10px] text-slate-400 mb-2 shrink-0">편집 중의 정보는 실제 일지 기록을 건드리지 않고 프리셋 구조만 격리 수정 보존합니다.</p>
-        
+        <div id="routine-editor-fullname-viewer" class="text-xs font-bold text-amber-400 bg-slate-950/90 px-3 py-2.5 rounded-xl border border-slate-800 hidden text-center animate-fade-in shrink-0 mb-2"></div>
+
         <button onclick="window.triggerLibraryAddFromEditor()" class="w-full py-2.5 mb-2 bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-500 text-white text-xs font-black rounded-xl transition-all shadow-md shrink-0">
             ＋ 이 프로그램에 새 운동 종목 추가하기
         </button>
@@ -440,6 +533,129 @@
             <button onclick="window.closeTemplatePopupEditor()" class="flex-1 py-3 bg-slate-900 border border-slate-700 text-slate-400 hover:text-white text-xs font-bold rounded-xl">편집취소</button>
             <button onclick="window.saveTemplatePopupEditorData()" class="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl shadow-lg">💾 편집완료 저장</button>
         </div>
+    </div>
+</div>
+
+<div id="previous-record-modal" class="fixed inset-0 z-[160] hidden items-center justify-center bg-black/85 backdrop-blur-sm px-4">
+    <div class="glass-panel p-5 sm:p-6 rounded-3xl w-full max-w-lg max-h-[80vh] flex flex-col border border-sky-500/30 shadow-2xl animate-fade-in overflow-hidden">
+        <div class="flex justify-between items-center mb-3 shrink-0">
+            <h3 id="previous-record-title" class="text-base font-black text-white">📜 이전기록</h3>
+            <button onclick="window.closePreviousRecordModal()" class="text-slate-400 hover:text-white font-black text-sm px-2 py-1">✕</button>
+        </div>
+        <div id="previous-record-list" class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2"></div>
+        <button onclick="window.closePreviousRecordModal()" class="w-full py-3 mt-4 bg-slate-800 border border-slate-700 text-xs font-bold text-slate-300 rounded-xl shrink-0">닫기</button>
+    </div>
+</div>
+
+<div id="muscle-guide-modal" class="fixed inset-0 z-[160] hidden items-center justify-center bg-black/85 backdrop-blur-sm px-4">
+    <div class="glass-panel p-5 sm:p-6 rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col border border-amber-500/30 shadow-2xl animate-fade-in overflow-hidden">
+        <div class="flex justify-between items-center mb-3 shrink-0">
+            <h3 id="muscle-guide-title" class="text-base font-black text-white">🎯 근육 가이드</h3>
+            <button onclick="window.closeMuscleGuideModal()" class="text-slate-400 hover:text-white font-black text-sm px-2 py-1">✕</button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-4">
+            <div class="flex items-center gap-4">
+                <img id="muscle-guide-image" src="" alt="" class="w-20 h-20 rounded-xl object-cover border border-slate-800 shrink-0">
+                <div class="space-y-1">
+                    <p class="text-xs text-slate-400">권장 세트 수 <span id="muscle-guide-sets" class="text-amber-400 font-black"></span></p>
+                    <p class="text-xs text-slate-400">권장 반복 수 <span id="muscle-guide-reps" class="text-amber-400 font-black"></span></p>
+                </div>
+            </div>
+            <p id="muscle-guide-rationale" class="text-xs text-slate-300 leading-relaxed bg-slate-950/50 border border-slate-800 rounded-xl p-3"></p>
+            <div>
+                <h4 class="text-xs font-black text-amber-500 uppercase tracking-wider mb-2">📋 세트수에 반영된 종목</h4>
+                <div id="muscle-guide-contributions" class="bg-slate-950/50 border border-slate-800 rounded-xl p-3"></div>
+            </div>
+            <div>
+                <h4 class="text-xs font-black text-sky-400 uppercase tracking-wider mb-2">📖 볼륨 트레이닝 원칙</h4>
+                <div id="muscle-guide-principles" class="bg-slate-950/50 border border-slate-800 rounded-xl p-3"></div>
+            </div>
+        </div>
+        <button onclick="window.closeMuscleGuideModal()" class="w-full py-3 mt-4 bg-slate-800 border border-slate-700 text-xs font-bold text-slate-300 rounded-xl shrink-0">닫기</button>
+    </div>
+</div>
+
+<!-- [빠른 설정] '오늘자 체중기록' 하위 패널이 여는 모달 — index.html(식단)과 완전히 동일한 마크업/ID를
+     공유해야 js/diet/weightRecord.js의 openRecordModal()이 이 페이지에서도 그대로 동작한다. -->
+<div id="weight-record-modal" class="fixed inset-0 z-[180] hidden items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+    <div class="glass-panel p-5 sm:p-6 rounded-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in border border-sky-500/40 shadow-2xl custom-scrollbar">
+        <h3 class="text-lg font-bold text-white mb-1 flex items-center gap-2" id="record-modal-title">＋ 오늘 기록</h3>
+        <p class="text-[11px] text-slate-400 mb-4">아래 항목을 구획별로 입력해 주세요.</p>
+
+        <div class="space-y-5 text-sm">
+            <div class="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <h4 class="text-xs font-black text-sky-400 uppercase tracking-wider">① 기본 정보</h4>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">기록 일자</label><input type="date" id="record-date-input" class="bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-bold outline-none text-xs w-40" onchange="window.handleRecordDateChange(this.value)"></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">해당 요일</label><input type="text" id="record-day-display" readonly class="bg-slate-950 border border-slate-800 text-slate-400 rounded-lg p-2 text-center font-bold text-xs w-40 outline-none"></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-white">공복 체중</label><div class="flex items-center gap-1.5"><input type="number" step="0.01" inputmode="decimal" id="record-weight-input" class="w-24 bg-slate-950 border border-sky-500 rounded-lg p-2 text-right text-white font-black outline-none text-xs"><span class="text-xs text-slate-400">kg</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-white">체지방률</label><div class="flex items-center gap-1.5"><input type="number" step="0.1" inputmode="decimal" id="record-bf-input" class="w-24 bg-slate-950 border border-amber-500 rounded-lg p-2 text-right text-white font-black outline-none text-xs"><span class="text-xs text-slate-400">%</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">총 수면시간</label><div class="flex items-center gap-1.5"><input type="number" step="0.1" inputmode="decimal" id="record-sleep-input" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs"><span class="text-xs text-slate-400">시간</span></div></div>
+            </div>
+
+            <div class="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <h4 class="text-xs font-black text-sky-400 uppercase tracking-wider">② 활동 지표</h4>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">공복 눈바디 평점</label><div class="flex items-center gap-1.5"><input type="number" inputmode="numeric" id="record-visual-input" min="1" max="10" placeholder="1~10" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-center text-white font-bold outline-none text-xs"><span class="text-xs text-slate-500">점</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">공복 심박수</label><div class="flex items-center gap-1.5"><input type="number" inputmode="numeric" id="record-hr-input" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs"><span class="text-xs text-slate-500">bpm</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">수행 운동부위</label><input type="text" id="record-part-input" placeholder="예: 하체 / 어깨" class="bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-bold outline-none text-xs w-48"></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">근력 트레이닝</label><div class="flex items-center gap-1.5"><input type="number" inputmode="numeric" id="record-anaerobic-input" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs"><span class="text-xs text-slate-400">분</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">체지방 컷 유산소</label><div class="flex items-center gap-1.5"><input type="number" inputmode="numeric" id="record-aerobic-input" class="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs"><span class="text-xs text-slate-400">분</span></div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">당일 총 수분섭취</label><div class="flex items-center gap-1.5">
+                    <input type="number" step="0.1" inputmode="decimal" id="record-water-input" class="w-20 bg-slate-950 border border-slate-700 rounded-lg p-2 text-right text-white font-bold outline-none text-xs">
+                    <button type="button" onclick="document.getElementById('record-water-input').value = (parseFloat(document.getElementById('record-water-input').value)||0)+0.5" class="px-2 py-1 bg-slate-800 text-slate-300 rounded text-[10px] font-black active:bg-slate-700 select-none">+0.5L</button>
+                </div></div>
+                <div class="flex justify-between items-center"><label class="text-xs font-bold text-slate-300">소화 대사 배변여부</label>
+                    <div class="grid grid-cols-2 gap-1 w-28 h-7 text-xs">
+                        <button type="button" id="btn-bowel-o" onclick="window.setBowelField('O')" class="bg-slate-950 border border-slate-700 text-slate-400 rounded-lg font-black transition-colors">O 성공</button>
+                        <button type="button" id="btn-bowel-x" onclick="window.setBowelField('X')" class="bg-slate-950 border border-slate-700 text-slate-400 rounded-lg font-black transition-colors">X 정체</button>
+                    </div>
+                </div>
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-400 block">종합 컨디션 레벨 평점</label>
+                    <div class="flex items-center gap-3 bg-slate-950 p-2.5 border border-slate-800 rounded-xl">
+                        <input type="range" id="record-condition-input" min="1" max="10" value="7" class="flex-1 accent-sky-500" oninput="document.getElementById('cond-val-lbl').innerText = this.value + '점'">
+                        <span id="cond-val-lbl" class="w-10 font-black text-center text-sky-400 text-xs shrink-0">7점</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                    <h4 class="text-xs font-black text-emerald-400 uppercase tracking-widest">③ 영양 정보</h4>
+                    <button type="button" onclick="window.pullDietaryMacrosFromPlanner()" class="px-2.5 py-1 bg-emerald-500 text-slate-950 text-[10px] font-black rounded-md shadow hover:bg-emerald-400 transition-all active:scale-95 shrink-0 whitespace-nowrap">
+                        📥 식단 세트 정보 불러오기
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">탄수화물 (g)</label><input type="number" id="record-carbs-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-white outline-none text-xs" inputmode="numeric"></div>
+                    <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">단백질 (g)</label><input type="number" id="record-protein-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-white outline-none text-xs" inputmode="numeric"></div>
+                    <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">지방 (g)</label><input type="number" id="record-fat-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-white outline-none text-xs" inputmode="numeric"></div>
+                    <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">총 칼로리 (kcal)</label><input type="number" id="record-kcal-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-black text-white outline-none text-xs" inputmode="numeric"></div>
+                </div>
+                <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-medium text-[11px]">탄:단:지 실질 열량 비율</span>
+                    <span id="record-ratio-display" class="font-black text-emerald-400 tracking-wider">0:0:0</span>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                <h4 class="text-xs font-black text-purple-400 uppercase tracking-widest border-b border-slate-800/60 pb-1">④ 메모</h4>
+                <div class="space-y-1">
+                    <label class="text-slate-400 text-xs font-medium block">특이사항 퀵 태그 배치</label>
+                    <div class="flex flex-wrap gap-1" id="quick-note-chips-box">
+                        <button type="button" onclick="window.toggleQuickNoteChip('정상식단')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">정상식단</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('외식기입')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">외식기입</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('치팅데이')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">치팅데이</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('탄수화물로딩')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">탄수화물로딩</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('수분조절밴딩')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">수분조절밴딩</button>
+                        <button type="button" onclick="window.toggleQuickNoteChip('가벼운음주')" class="chip-note-tag px-2 py-1 text-[10px] font-bold rounded-md bg-slate-950 border border-slate-700 text-slate-400 transition-all">가벼운음주</button>
+                    </div>
+                </div>
+                <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">선택된 특이사항 칩 명세</label><input type="text" id="record-special-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-300 font-bold outline-none text-xs" placeholder="직접 기입하거나 상단 단추를 선택하십시오."></div>
+                <div class="space-y-1"><label class="text-slate-400 text-xs font-medium block">자유 형태 피드백 메모</label><textarea id="record-memo-input" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-medium text-white text-xs outline-none custom-scrollbar" placeholder="훈련 피드백 및 대사 징후 등을 상세히 기록하십시오."></textarea></div>
+            </div>
+        </div>
+
+        <div class="flex gap-3 mt-6 border-t border-slate-800 pt-4"><button onclick="window.closeRecordModal()" class="flex-1 py-3 rounded-xl border border-slate-700 text-slate-300 font-bold hover:bg-slate-800 transition-colors">취소합니다</button><button onclick="window.saveWeightRecordData()" class="flex-1 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition-colors">저장 완료합니다</button></div>
     </div>
 </div>
 
